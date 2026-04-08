@@ -82,7 +82,7 @@ function createReviewRequiredPayload(): ImportResultPayload {
       summary: "Một số trường cần operator xác nhận.",
       items: [
         {
-          id: "student-code-1",
+          id: "review-1",
           fieldKey: "studentCode",
           rowIndex: 2,
           label: "MSHV",
@@ -93,11 +93,12 @@ function createReviewRequiredPayload(): ImportResultPayload {
           source: "rule",
           sensitive: true,
           requiresReview: true,
+          autoApplied: false,
         },
       ],
       audit: [
         {
-          id: "student-code-1",
+          id: "audit-1",
           scope: "field",
           fieldKey: "studentCode",
           rowIndex: 2,
@@ -119,7 +120,7 @@ function createReviewRequiredPayload(): ImportResultPayload {
       stagedStudents: [createStudent()],
       auditTrail: [
         {
-          id: "student-code-1",
+          id: "audit-1",
           scope: "field",
           fieldKey: "studentCode",
           rowIndex: 2,
