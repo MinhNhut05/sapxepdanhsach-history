@@ -12,11 +12,14 @@ Phân phòng thi chính xác, công bằng, và xuất kết quả dùng đượ
 
 ### Validated
 
-(None yet — ship to validate)
+Validated in Phase 1: Data Foundation
+
+- [x] Upload file Excel (.xlsx) và đọc đúng cấu trúc (Lớp, MSHV, HỌ LÓT, TÊN, NGÀY SINH, NƠI SINH, GHI CHÚ tùy chọn)
+- [x] Chuẩn hóa sắp xếp tiếng Việt (không sort ASCII đơn thuần)
+- [x] Xử lý linh hoạt cột GHI CHÚ có hoặc không có trong file upload
 
 ### Active
 
-- [ ] Upload file Excel (.xlsx) và đọc đúng cấu trúc (Lớp, MSHV, HỌ LÓT, TÊN, NGÀY SINH, NƠI SINH, GHI CHÚ tùy chọn)
 - [ ] 3 phương án phân phòng: trộn đều, giữ tương đối theo lớp, phân bổ tỉ lệ đại diện
 - [ ] Sắp xếp theo TÊN (tiếng Việt chuẩn), tie-break bằng HỌ LÓT rồi MSHV
 - [ ] Đánh số báo danh theo format Pxx-yyy (phòng + thứ tự)
@@ -28,8 +31,6 @@ Phân phòng thi chính xác, công bằng, và xuất kết quả dùng đượ
 - [ ] Xuất file Excel: 1 sheet tổng + mỗi phòng 1 sheet riêng
 - [ ] In print-friendly danh sách từng phòng ngay trên web
 - [ ] Lưu lịch sử các lần phân phòng vào DB (PostgreSQL)
-- [ ] Chuẩn hóa sắp xếp tiếng Việt (không sort ASCII đơn thuần)
-- [ ] Xử lý linh hoạt cột GHI CHÚ có hoặc không có trong file upload
 
 ### Out of Scope
 
@@ -72,6 +73,10 @@ Phân phòng thi chính xác, công bằng, và xuất kết quả dùng đượ
 | SBD format Pxx-yyy | Dễ đọc, dễ in, gắn rõ phòng + thứ tự, không trùng lặp | — Pending |
 | Excel output master + per-room sheets | Tiện lọc tổng + in từng phòng, đáp ứng cả 2 nhu cầu | — Pending |
 
+## Current State
+
+Phase 1 complete. The project now has a Vietnamese-first app shell, guarded `.xlsx` roster import, server-owned validation, and upload preview/results UI ready for the allocation engine.
+
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
@@ -90,4 +95,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-08 after initialization*
+*Last updated: 2026-04-08 after Phase 1 completion*
