@@ -101,49 +101,49 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IMPT-01 | Phase TBD | Pending |
-| IMPT-02 | Phase TBD | Pending |
-| IMPT-03 | Phase TBD | Pending |
-| IMPT-04 | Phase TBD | Pending |
-| IMPT-05 | Phase TBD | Pending |
-| IMPT-06 | Phase TBD | Pending |
-| ALOC-01 | Phase TBD | Pending |
-| ALOC-02 | Phase TBD | Pending |
-| ALOC-03 | Phase TBD | Pending |
-| ALOC-04 | Phase TBD | Pending |
-| ALOC-05 | Phase TBD | Pending |
-| ALOC-06 | Phase TBD | Pending |
-| ALOC-07 | Phase TBD | Pending |
-| ALOC-08 | Phase TBD | Pending |
-| PREV-01 | Phase TBD | Pending |
-| PREV-02 | Phase TBD | Pending |
-| PREV-03 | Phase TBD | Pending |
-| PREV-04 | Phase TBD | Pending |
-| PREV-05 | Phase TBD | Pending |
-| EDIT-01 | Phase TBD | Pending |
-| EDIT-02 | Phase TBD | Pending |
-| EDIT-03 | Phase TBD | Pending |
-| EDIT-04 | Phase TBD | Pending |
-| EDIT-05 | Phase TBD | Pending |
-| EXPT-01 | Phase TBD | Pending |
-| EXPT-02 | Phase TBD | Pending |
-| EXPT-03 | Phase TBD | Pending |
-| EXPT-04 | Phase TBD | Pending |
-| EXPT-05 | Phase TBD | Pending |
-| EXPT-06 | Phase TBD | Pending |
-| HIST-01 | Phase TBD | Pending |
-| HIST-02 | Phase TBD | Pending |
-| HIST-03 | Phase TBD | Pending |
-| HIST-04 | Phase TBD | Pending |
-| SAFE-01 | Phase TBD | Pending |
-| SAFE-02 | Phase TBD | Pending |
-| SAFE-03 | Phase TBD | Pending |
+| IMPT-01 | Phase 1 | Pending |
+| IMPT-02 | Phase 1 | Pending |
+| IMPT-03 | Phase 1 | Pending |
+| IMPT-04 | Phase 1 | Pending |
+| IMPT-05 | Phase 1 | Pending |
+| IMPT-06 | Phase 1 | Pending |
+| ALOC-01 | Phase 2 | Pending |
+| ALOC-02 | Phase 2 | Pending |
+| ALOC-03 | Phase 2 | Pending |
+| ALOC-04 | Phase 2 | Pending |
+| ALOC-05 | Phase 2 | Pending |
+| ALOC-06 | Phase 2 | Pending |
+| ALOC-07 | Phase 2 | Pending |
+| ALOC-08 | Phase 2 | Pending |
+| PREV-01 | Phase 3 | Pending |
+| PREV-02 | Phase 3 | Pending |
+| PREV-03 | Phase 3 | Pending |
+| PREV-04 | Phase 3 | Pending |
+| PREV-05 | Phase 3 | Pending |
+| EDIT-01 | Phase 3 | Pending |
+| EDIT-02 | Phase 3 | Pending |
+| EDIT-03 | Phase 3 | Pending |
+| EDIT-04 | Phase 3 | Pending |
+| EDIT-05 | Phase 3 | Pending |
+| EXPT-01 | Phase 4 | Pending |
+| EXPT-02 | Phase 4 | Pending |
+| EXPT-03 | Phase 4 | Pending |
+| EXPT-04 | Phase 4 | Pending |
+| EXPT-05 | Phase 4 | Pending |
+| EXPT-06 | Phase 4 | Pending |
+| HIST-01 | Phase 2 | Pending |
+| HIST-02 | Phase 4 | Pending |
+| HIST-03 | Phase 2 | Pending |
+| HIST-04 | Phase 2 | Pending |
+| SAFE-01 | Phase 1 | Pending |
+| SAFE-02 | Phase 1 | Pending |
+| SAFE-03 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 36 total
-- Mapped to phases: 0
-- Unmapped: 36 ⚠️
+- Mapped to phases: 36
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-08*
-*Last updated: 2026-04-08 after initial definition*
+*Last updated: 2026-04-08 after roadmap creation*
