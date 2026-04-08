@@ -10,6 +10,9 @@ import type { IntakeSourceFormat } from "@/features/roster/ui/import-state";
 
 import { buildIntakeReview } from "./build-intake-review";
 import { detectHeaderRow } from "./detect-header-row";
+import { handleIntakeAiFailure } from "./intake-ai-fallback";
+import { createIntakeAiProvider } from "./intake-ai-provider";
+import { getSmartIntakeConfig } from "./intake-config";
 import { readIntakeFile } from "./read-intake-file";
 import {
   findDuplicateStudentCodeIssues,
@@ -44,6 +47,96 @@ export interface RosterImportResult {
 interface ImportRosterWorkbookOptions {
   fileName?: string;
   mimeType?: string;
+}
+
+function createAiRepairProposal(input: {
+  fieldKey: RepairProposal["fieldKey"];
+  label: string;
+  rawValue: string | null;
+  proposedValue: string | null;
+  confidence: RepairProposal["confidence"];
+  reasoning: string;
+  sensitive?: boolean;
+}): RepairProposal {
+  return {
+    fieldKey: input.fieldKey,
+    label: input.label,
+    rawValue: input.rawValue,
+    proposedValue: input.proposedValue,
+    repairType: "note_cleanup",
+    source: "ai",
+    confidence: input.confidence,
+    reason: input.reasoning,
+    sensitive: input.sensitive ?? false,
+  };
+}
+
+function applyAiSuggestions(
+  review: IntakeReviewPayload,
+  aiRepairs: RepairProposal[],
+): IntakeReviewPayload {
+  if (aiRepairs.length === 0) {
+    return review;
+  }
+
+  const appendedReview = buildIntakeReview({
+    students: review.stagedStudents,
+    repairs: aiRepairs,
+    issues: [],
+  });
+
+  const mergedItems = [...review.items, ...appendedReview.items];
+  const mergedAuditTrail = [...review.auditTrail, ...appendedReview.auditTrail].map(
+    (record, index) => ({
+      ...record,
+      id: `audit-${index + 1}`,
+    }),
+  );
+  const mergedUnresolvedCount = mergedItems.filter((item) => item.requiresReview).length;
+
+  return {
+    ...review,
+    state: mergedUnresolvedCount > 0 ? "review_required" : "ready",
+    items: mergedItems.map((item, index) => ({
+      ...item,
+      id: `review-${index + 1}`,
+      source: item.source ?? "ai",
+      requiresReview:
+        item.fieldKey === "studentCode" || item.fieldKey === "className"
+          ? true
+          : item.requiresReview,
+      autoApplied:
+        item.fieldKey === "studentCode" || item.fieldKey === "className"
+          ? false
+          : item.autoApplied,
+    })),
+    auditTrail: mergedAuditTrail,
+    audit: mergedAuditTrail,
+    unresolvedCount: mergedUnresolvedCount,
+    confidenceSummary: {
+      high: mergedItems.filter((item) => item.confidence === "high").length,
+      medium: mergedItems.filter((item) => item.confidence === "medium").length,
+      low: mergedItems.filter((item) => item.confidence === "low").length,
+    },
+    summary:
+      mergedUnresolvedCount > 0
+        ? `Có ${mergedUnresolvedCount} thay đổi cần người dùng review trước khi tiếp tục.`
+        : "Không có thay đổi nhạy cảm hoặc mơ hồ cần review.",
+  };
+}
+
+function shouldRequestAiSuggestions(review: IntakeReviewPayload): boolean {
+  return review.items.some(
+    (item) => item.confidence !== "high" || item.fieldKey === "studentCode" || item.fieldKey === "className",
+  );
+}
+
+function createFallbackIssue(message: string): ImportIssue {
+  return {
+    severity: "info",
+    code: "smart_intake_ai_fallback",
+    message,
+  };
 }
 
 function createSummary(
@@ -246,23 +339,65 @@ export async function importRosterWorkbook(
     issues,
   });
 
-  const ready = review.unresolvedCount === 0;
+  const config = getSmartIntakeConfig();
+  const provider = createIntakeAiProvider(config);
+  const shouldConsultAi = shouldRequestAiSuggestions(review);
+  let fallbackUsed = intakeFile.sourceFormat === "csv";
+  let reviewPayload = review;
+  let issueList = issues;
+
+  if (provider && shouldConsultAi) {
+    try {
+      const suggestions = await provider.suggestRepairs({
+        sourceFormat: intakeFile.sourceFormat,
+        students: sortedStudents,
+        issues,
+        repairs,
+      });
+      const aiRepairs = suggestions.map((suggestion) =>
+        createAiRepairProposal({
+          fieldKey: suggestion.fieldKey,
+          label: suggestion.label,
+          rawValue: suggestion.rawValue,
+          proposedValue: suggestion.proposedValue,
+          confidence: suggestion.confidence,
+          reasoning: suggestion.reasoning,
+          sensitive: suggestion.sensitive,
+        }),
+      );
+      reviewPayload = applyAiSuggestions(review, aiRepairs);
+    } catch (error) {
+      const fallback = handleIntakeAiFailure(error);
+      fallbackUsed = true;
+      issueList = [...issueList, createFallbackIssue(fallback.message)];
+    }
+  } else if (shouldConsultAi) {
+    fallbackUsed = true;
+    issueList = [
+      ...issueList,
+      createFallbackIssue(
+        "Smart Intake AI chưa sẵn sàng nên hệ thống dùng rule-based review.",
+      ),
+    ];
+  }
+
+  const ready = reviewPayload.unresolvedCount === 0;
 
   return {
     ok: true,
     intakeState: ready ? "ready" : "review_required",
     sourceFormat: intakeFile.sourceFormat,
     requiresReview: !ready,
-    fallbackUsed: intakeFile.sourceFormat === "csv",
-    review,
+    fallbackUsed,
+    review: reviewPayload,
     summary: createSummary(
       intakeFile.sheetName,
       dataRows.length,
-      issues,
+      issueList,
       sortedStudents,
     ),
     students: ready ? sortedStudents : [],
-    stagedStudents: review.stagedStudents,
-    issues,
+    stagedStudents: reviewPayload.stagedStudents,
+    issues: issueList,
   };
 }

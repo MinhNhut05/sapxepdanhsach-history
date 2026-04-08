@@ -121,6 +121,7 @@ export function buildIntakeReview({
     unresolvedCount,
     items,
     auditTrail,
+    audit: auditTrail,
     stagedStudents: students,
   };
 }

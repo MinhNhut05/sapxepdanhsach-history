@@ -211,7 +211,7 @@ export function UploadPanel({ onImportResultChange }: UploadPanelProps) {
               <div className="soft-panel">
                 <p className="field-label">Audit records</p>
                 <p className="mt-2 text-lg font-semibold text-[var(--text-primary)]">
-                  {result.review.audit.length}
+                  {(result.review.audit ?? result.review.auditTrail ?? []).length}
                 </p>
               </div>
               <div className="soft-panel">
