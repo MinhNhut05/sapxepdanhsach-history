@@ -135,16 +135,22 @@ function failureResult(
   };
 }
 
+function toArrayBuffer(input: ArrayBuffer | Buffer | Uint8Array): ArrayBuffer {
+  if (input instanceof ArrayBuffer) {
+    return input;
+  }
+
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 export async function importRosterWorkbook(
   input: ArrayBuffer | Buffer | Uint8Array,
   options: ImportRosterWorkbookOptions = {},
 ): Promise<RosterImportResult> {
-  const arrayBuffer =
-    input instanceof ArrayBuffer
-      ? input
-      : input instanceof Uint8Array
-        ? input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength)
-        : input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
+  const arrayBuffer = toArrayBuffer(input);
 
   const intakeFile = await readIntakeFile(arrayBuffer, {
     fileName: options.fileName ?? "roster.xlsx",
