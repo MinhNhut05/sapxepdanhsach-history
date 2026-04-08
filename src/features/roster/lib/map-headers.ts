@@ -37,10 +37,21 @@ export interface RosterHeaderMapResult {
 
 type HeaderRowInput = ReadonlyArray<unknown> | { values: ReadonlyArray<unknown> };
 
-const supportedHeaderEntries: Array<[RosterHeaderKey, string]> = [
-  ...Object.entries(REQUIRED_ROSTER_HEADERS),
-  ...Object.entries(OPTIONAL_ROSTER_HEADERS),
-] as Array<[RosterHeaderKey, string]>;
+const HEADER_ALIASES: Record<RosterHeaderKey, string[]> = {
+  className: ["Lớp", "Lop", "Tên lớp"],
+  studentCode: ["MSHV", "Mã HV", "Ma hoc vien"],
+  middleName: ["HỌ LÓT", "Họ lót", "Ho lot"],
+  firstName: ["TÊN", "Ten", "First Name"],
+  birthDate: ["NGÀY SINH", "Ngày sinh", "Ngay sinh", "DOB"],
+  birthPlace: ["NƠI SINH", "Nơi sinh", "Noi sinh"],
+  note: ["GHI CHÚ", "Ghi chú", "Ghi chu", "Note"],
+};
+
+const supportedHeaderEntries: Array<[RosterHeaderKey, string]> = Object.entries(
+  HEADER_ALIASES,
+).flatMap(([headerKey, aliases]) =>
+  aliases.map((alias): [RosterHeaderKey, string] => [headerKey as RosterHeaderKey, alias]),
+);
 
 function toLookupKey(value: unknown): string {
   if (typeof value !== "string") {
