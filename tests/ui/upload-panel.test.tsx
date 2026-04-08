@@ -34,6 +34,10 @@ function createStudent(): CanonicalStudentRecord {
 function createSuccessfulPayload(): ImportResultPayload {
   return {
     ok: true,
+    intakeState: "ready",
+    sourceFormat: "xlsx",
+    requiresReview: false,
+    fallbackUsed: false,
     summary: {
       worksheetName: "Roster",
       totalRowsRead: 1,
@@ -50,6 +54,10 @@ function createSuccessfulPayload(): ImportResultPayload {
 function createBlockingPayload(): ImportResultPayload {
   return {
     ok: false,
+    intakeState: "failed",
+    sourceFormat: "xlsx",
+    requiresReview: false,
+    fallbackUsed: false,
     summary: {
       worksheetName: "Roster",
       totalRowsRead: 1,
