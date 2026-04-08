@@ -44,7 +44,7 @@ async function callImportRoute(file?: File): Promise<Response> {
 }
 
 describe("POST /api/rosters/import", () => {
-  it("returns 200 for a successful import", async () => {
+  it("returns 200 for a clean .xlsx fast path", async () => {
     const file = await buildWorkbookFile([
       ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
       ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
@@ -56,10 +56,74 @@ describe("POST /api/rosters/import", () => {
     expect(response.status).toBe(200);
     expect(payload).toMatchObject({
       ok: true,
+      intakeState: "ready",
+      requiresReview: false,
+      sourceFormat: "xlsx",
+      sourceFileName: "roster.xlsx",
+      fallbackUsed: false,
       summary: {
         validStudents: 1,
       },
     });
+  });
+
+  it("returns 200 for a recoverable noisy .csv review_required path", async () => {
+    const file = new File(
+      [
+        [
+          "Danh sách học viên",
+          "Lớp,MSHV,HỌ LÓT,TÊN,NGÀY SINH,NƠI SINH",
+          " K19A , MS001 , nGUYỄN   văn , an , 13.10.1985 , huế ",
+        ].join("\n"),
+      ],
+      "roster.csv",
+      { type: "text/csv" },
+    );
+
+    const response = await callImportRoute(file);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      ok: true,
+      intakeState: "review_required",
+      requiresReview: true,
+      sourceFormat: "csv",
+      sourceFileName: "roster.csv",
+      fallbackUsed: true,
+      review: expect.objectContaining({
+        unresolvedCount: expect.any(Number),
+      }),
+    });
+    expect(payload.review.auditTrail).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          proposedValue: "1985-10-13",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps sensitive-field MSHV repair review-only instead of auto-applying", async () => {
+    const file = await buildWorkbookFile([
+      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+      ["K19A", " MSHV001 ", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+    ]);
+
+    const response = await callImportRoute(file);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.intakeState).toBe("review_required");
+    expect(payload.review.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldKey: "studentCode",
+          autoApplied: false,
+          requiresReview: true,
+        }),
+      ]),
+    );
   });
 
   it("returns 400 when the file field is missing", async () => {
@@ -127,6 +191,7 @@ describe("POST /api/rosters/import", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(422);
+    expect(payload.intakeState).toBe("failed");
     expect(payload.issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
