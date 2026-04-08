@@ -1,9 +1,9 @@
 import type { ImportIssue } from "@/features/roster/domain/import-issue";
-import {
-  importRosterWorkbook,
-  type RosterImportResult,
-  type RosterImportSummary,
+import type {
+  RosterImportResult,
+  RosterImportSummary,
 } from "@/features/roster/server/import-roster";
+import { importRosterWorkbook } from "@/features/roster/server/import-roster";
 import { validateRosterUpload } from "@/features/roster/server/file-guard";
 
 function emptySummary(): RosterImportSummary {
@@ -30,11 +30,16 @@ function errorResult(code: string, message: string): RosterImportResult {
 
   return {
     ok: false,
+    intakeState: "failed",
+    sourceFormat: "unknown",
+    requiresReview: false,
+    fallbackUsed: false,
     summary: {
       ...emptySummary(),
       blockingIssues: issues.length,
     },
     students: [],
+    stagedStudents: [],
     issues,
   };
 }
@@ -52,9 +57,20 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const uploadFile = file as File;
-  const importResult = await importRosterWorkbook(await uploadFile.arrayBuffer());
-
-  return Response.json(importResult, {
-    status: importResult.ok ? 200 : 422,
+  const importResult = await importRosterWorkbook(await uploadFile.arrayBuffer(), {
+    fileName: guardResult.fileName,
+    mimeType: guardResult.mimeType,
   });
+
+  return Response.json(
+    {
+      ...importResult,
+      sourceFileName: guardResult.fileName,
+      sourceFormat: importResult.sourceFormat,
+      fallbackUsed: importResult.fallbackUsed,
+    },
+    {
+      status: importResult.ok ? 200 : 422,
+    },
+  );
 }
