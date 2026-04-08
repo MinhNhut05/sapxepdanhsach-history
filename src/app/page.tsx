@@ -1,3 +1,5 @@
+import { UploadPanel } from "@/features/roster/ui/upload-panel";
+
 const checkpoints = [
   "Tải roster .xlsx từ phòng đào tạo",
   "Chuẩn hóa tiếng Việt và ngày sinh trên server",
@@ -56,19 +58,11 @@ export default function HomePage() {
                 Chấp nhận đúng định dạng `.xlsx` với các cột bắt buộc của roster.
               </p>
               <p>
-                Kết quả preview và bảng lỗi sẽ xuất hiện tại đây sau khi API import
-                hoàn tất ở các bước kế tiếp của Phase 1.
+                Form upload dùng trực tiếp dữ liệu trả về từ API import, không tự
+                dựng kết quả kiểm tra ở phía client.
               </p>
             </div>
-            <div className="empty-slot">
-              <p className="text-sm font-medium text-[var(--text-primary)]">
-                Ô tải file sẽ được gắn ở đây
-              </p>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Gợi ý cho cán bộ khảo thí: dùng file roster gốc từ Excel, không đổi
-                tên cột bắt buộc, chỉ thêm `GHI CHÚ` khi cần.
-              </p>
-            </div>
+            <UploadPanel />
           </aside>
         </div>
       </section>
