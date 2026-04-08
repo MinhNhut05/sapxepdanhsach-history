@@ -34,6 +34,7 @@ function createStudent(): CanonicalStudentRecord {
 function createSuccessfulPayload(): ImportResultPayload {
   return {
     ok: true,
+    sourceFileName: "roster.xlsx",
     intakeState: "ready",
     sourceFormat: "xlsx",
     requiresReview: false,
@@ -51,9 +52,94 @@ function createSuccessfulPayload(): ImportResultPayload {
   };
 }
 
+function createReviewRequiredPayload(): ImportResultPayload {
+  return {
+    ok: true,
+    sourceFileName: "roster.csv",
+    intakeState: "review_required",
+    sourceFormat: "csv",
+    requiresReview: true,
+    fallbackUsed: false,
+    summary: {
+      worksheetName: "Roster",
+      totalRowsRead: 1,
+      validStudents: 1,
+      blockingIssues: 0,
+      warningIssues: 1,
+      infoIssues: 1,
+    },
+    students: [createStudent()],
+    issues: [
+      {
+        severity: "warning",
+        code: "review_required",
+        message: "Cần review trước khi phân phòng.",
+      },
+    ],
+    review: {
+      state: "review_required",
+      confidence: "medium",
+      summary: "Một số trường cần operator xác nhận.",
+      items: [
+        {
+          id: "student-code-1",
+          fieldKey: "studentCode",
+          rowIndex: 2,
+          label: "MSHV",
+          currentValue: "MS 001",
+          proposedValue: "MS001",
+          confidence: "medium",
+          reason: "Chuẩn hóa khoảng trắng ở MSHV.",
+          source: "rule",
+          sensitive: true,
+          requiresReview: true,
+        },
+      ],
+      audit: [
+        {
+          id: "student-code-1",
+          scope: "field",
+          fieldKey: "studentCode",
+          rowIndex: 2,
+          rawValue: "MS 001",
+          proposedValue: "MS001",
+          decisionSource: "rule",
+          confidence: "medium",
+          reason: "Chuẩn hóa khoảng trắng ở MSHV.",
+          autoApplied: false,
+          sensitive: true,
+        },
+      ],
+      unresolvedCount: 1,
+      confidenceSummary: {
+        high: 0,
+        medium: 1,
+        low: 0,
+      },
+      stagedStudents: [createStudent()],
+      auditTrail: [
+        {
+          id: "student-code-1",
+          scope: "field",
+          fieldKey: "studentCode",
+          rowIndex: 2,
+          rawValue: "MS 001",
+          proposedValue: "MS001",
+          decisionSource: "rule",
+          confidence: "medium",
+          reason: "Chuẩn hóa khoảng trắng ở MSHV.",
+          autoApplied: false,
+          sensitive: true,
+        },
+      ],
+    },
+  };
+}
+
 function createBlockingPayload(): ImportResultPayload {
   return {
     ok: false,
+    sourceFileName: "roster.xlsx",
     intakeState: "failed",
     sourceFormat: "xlsx",
     requiresReview: false,
@@ -84,6 +170,15 @@ afterEach(() => {
 });
 
 describe("UploadPanel", () => {
+  it("accepts .xlsx, .xls, and .csv uploads", () => {
+    render(<UploadPanel />);
+
+    expect(screen.getByLabelText(/Tệp roster/i)).toHaveAttribute(
+      "accept",
+      ".xlsx,.xls,.csv",
+    );
+  });
+
   it("disables the submit button while uploading and renders parsed students on success", async () => {
     let resolveFetch:
       | ((value: { json: () => Promise<ImportResultPayload> }) => void)
@@ -127,6 +222,35 @@ describe("UploadPanel", () => {
 
     expect(screen.getByText("MS001")).toBeInTheDocument();
     expect(screen.getByText("Bảng học viên hợp lệ")).toBeInTheDocument();
+    expect(screen.getByText("ready")).toBeInTheDocument();
+  });
+
+  it("renders review_required messaging instead of the blocking-only error path", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        json: async () => createReviewRequiredPayload(),
+      })),
+    );
+
+    render(<UploadPanel />);
+
+    fireEvent.change(screen.getByLabelText(/Tệp roster/i), {
+      target: {
+        files: [new File(["roster"], "roster.csv", { type: "text/csv" })],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Import roster/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/review_required/i).length).toBeGreaterThan(0);
+    });
+
+    expect(screen.getByText(/File cần xác nhận trước khi phân phòng/i)).toBeInTheDocument();
+    expect(screen.getByText(/Payload review-required sẽ được chuyển nguyên vẹn vào workspace/i)).toBeInTheDocument();
+    expect(screen.queryByText("Bảng học viên hợp lệ")).not.toBeInTheDocument();
+    expect(screen.getByText("CSV")).toBeInTheDocument();
   });
 
   it("renders blocking validation feedback when the API returns an error payload", async () => {
