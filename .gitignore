@@ -3,3 +3,7 @@ node_modules
 .env
 coverage
 *.tsbuildinfo
+
+# Local AI agent tooling — not part of the repo
+.claude/
+.codex

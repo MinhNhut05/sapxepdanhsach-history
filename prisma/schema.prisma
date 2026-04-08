@@ -1,0 +1,31 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AllocationRun {
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  sourceFileName    String
+  sourceSheetName   String?
+  roomCount         Int
+  strategy          String
+  totalStudents     Int
+  algorithmVersion  String
+  rosterFingerprint String
+  inputSnapshot     Json
+  resultSnapshot    Json
+  summary           Json
+  editedResultSnapshot Json?
+  editedSummary       Json?
+  editVersion         Int      @default(0)
+  lastEditedAt        DateTime?
+
+  @@index([createdAt])
+  @@index([strategy])
+}
