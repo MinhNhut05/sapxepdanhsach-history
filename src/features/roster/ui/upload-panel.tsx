@@ -55,9 +55,7 @@ export function UploadPanel() {
           id="roster-upload"
           accept=".xlsx"
           className="w-full rounded-2xl border border-[var(--border-soft)] bg-white/90 px-4 py-3 text-sm text-[var(--text-primary)]"
-          onChange={(event) =>
-            setSelectedFile(event.target.files?.item(0) ?? null)
-          }
+          onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
           type="file"
         />
 
