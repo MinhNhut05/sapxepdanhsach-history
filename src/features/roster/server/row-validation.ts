@@ -413,7 +413,7 @@ export function validateWorkbookRow({
   pushRepairIfChanged(repairs, {
     fieldKey: "note",
     label: OPTIONAL_ROSTER_HEADERS.note,
-    rawValue: rawRecord.note,
+    rawValue: rawRecord.note ?? null,
     proposedValue: canonicalNote,
     repairType: "note_cleanup",
     reason: "Chuẩn hóa ghi chú bằng cách bỏ khoảng trắng thừa.",
