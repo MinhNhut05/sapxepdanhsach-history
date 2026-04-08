@@ -71,3 +71,14 @@ export function createUploadError(message: string): ImportResultPayload {
     ],
   };
 }
+
+export function getImportStateLabel(intakeState: IntakeFlowState): string {
+  switch (intakeState) {
+    case "ready":
+      return "ready";
+    case "review_required":
+      return "review_required";
+    case "failed":
+      return "failed";
+  }
+}
