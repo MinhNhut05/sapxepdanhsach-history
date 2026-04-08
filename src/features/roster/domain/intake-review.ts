@@ -47,5 +47,6 @@ export interface IntakeReviewPayload {
   unresolvedCount: number;
   items: IntakeReviewItem[];
   auditTrail: IntakeAuditRecord[];
+  audit?: IntakeAuditRecord[];
   stagedStudents: CanonicalStudentRecord[];
 }
