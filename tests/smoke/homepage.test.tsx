@@ -1,20 +1,47 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import HomePage from "../../src/app/page";
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("HomePage", () => {
-  it("renders the Vietnamese upload shell copy", () => {
+  it("renders the integrated allocation workspace shell", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+
+        if (url === "/api/allocations" && (!init?.method || init.method === "GET")) {
+          return {
+            ok: true,
+            text: async () =>
+              JSON.stringify({
+                retention: {
+                  days: 30,
+                  basis: "last_activity",
+                },
+                runs: [],
+              }),
+          } satisfies Partial<Response>;
+        }
+
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      }),
+    );
+
     render(<HomePage />);
 
     expect(
       screen.getByRole("heading", { level: 1, name: "ExamRoomAllocator" }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Không gian điều phối/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Tệp roster/i)).toBeInTheDocument();
+
     expect(
-      screen.getByText(/Sẵn sàng nhận file \.xlsx/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Chấp nhận đúng định dạng `.xlsx`/i),
+      await screen.findByText("Chưa có saved run nào còn trong retention window."),
     ).toBeInTheDocument();
   });
 });
