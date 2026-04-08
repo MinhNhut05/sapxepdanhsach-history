@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import ExcelJS from "exceljs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { POST } from "../../src/app/api/rosters/import/route";
 import { MAX_UPLOAD_BYTES } from "../../src/features/roster/server/file-guard";
@@ -42,6 +42,11 @@ async function callImportRoute(file?: File): Promise<Response> {
     }),
   );
 }
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 describe("POST /api/rosters/import", () => {
   it("returns 200 for a clean .xlsx fast path", async () => {
@@ -121,6 +126,42 @@ describe("POST /api/rosters/import", () => {
           fieldKey: "studentCode",
           autoApplied: false,
           requiresReview: true,
+        }),
+      ]),
+    );
+  });
+
+  it("returns review_required with fallbackUsed when provider quota is exhausted", async () => {
+    vi.stubEnv("SMART_INTAKE_AI_PROVIDER", "mock");
+    vi.stubEnv("SMART_INTAKE_AI_BASE_URL", "https://ai.example.com");
+    vi.stubEnv("SMART_INTAKE_AI_API_KEY", "secret-key");
+    vi.stubEnv("SMART_INTAKE_AI_REASONING_MODEL", "reasoning-model");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 429,
+        json: async () => ({}),
+      })),
+    );
+
+    const file = await buildWorkbookFile([
+      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+      ["K19A", " MSHV001 ", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+    ]);
+
+    const response = await callImportRoute(file);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.intakeState).toBe("review_required");
+    expect(payload.fallbackUsed).toBe(true);
+    expect(payload.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "smart_intake_ai_fallback",
+          message: expect.stringMatching(/quota/i),
         }),
       ]),
     );

@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { importRosterWorkbook } from "../../src/features/roster/server/import-roster";
 
@@ -11,6 +11,11 @@ async function buildWorkbookBuffer(rows: unknown[][]): Promise<Buffer> {
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 describe("importRosterWorkbook", () => {
   it("imports valid workbooks with and without GHI CHÚ", async () => {
@@ -117,6 +122,97 @@ describe("importRosterWorkbook", () => {
           fieldKey: "className",
           requiresReview: true,
           autoApplied: false,
+        }),
+      ]),
+    );
+  });
+
+  it("keeps ambiguous AI suggestions visible in review with source ai", async () => {
+    vi.stubEnv("SMART_INTAKE_AI_PROVIDER", "mock");
+    vi.stubEnv("SMART_INTAKE_AI_BASE_URL", "https://ai.example.com");
+    vi.stubEnv("SMART_INTAKE_AI_API_KEY", "secret-key");
+    vi.stubEnv("SMART_INTAKE_AI_REASONING_MODEL", "reasoning-model");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  suggestions: [
+                    {
+                      fieldKey: "note",
+                      label: "GHI CHÚ",
+                      rawValue: "ưu tiên cửa sổ",
+                      proposedValue: "Ưu tiên cửa sổ",
+                      confidence: "medium",
+                      reasoning: "AI chuẩn hóa ghi chú để operator review.",
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      })),
+    );
+
+    const buffer = await buildWorkbookBuffer([
+      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH", "GHI CHÚ"],
+      [" K19A ", " MS001 ", "Nguyễn Văn", "An", "2024-01-13", "Huế", "ưu tiên cửa sổ"],
+    ]);
+
+    const result = await importRosterWorkbook(buffer, {
+      fileName: "roster.xlsx",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.review?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "ai",
+          proposedValue: "Ưu tiên cửa sổ",
+          requiresReview: true,
+        }),
+      ]),
+    );
+  });
+
+  it("falls back to review_required when AI quota is exhausted", async () => {
+    vi.stubEnv("SMART_INTAKE_AI_PROVIDER", "mock");
+    vi.stubEnv("SMART_INTAKE_AI_BASE_URL", "https://ai.example.com");
+    vi.stubEnv("SMART_INTAKE_AI_API_KEY", "secret-key");
+    vi.stubEnv("SMART_INTAKE_AI_REASONING_MODEL", "reasoning-model");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 429,
+        json: async () => ({}),
+      })),
+    );
+
+    const buffer = await buildWorkbookBuffer([
+      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+      [" K19A ", " MS001 ", "Nguyễn Văn", "An", "03.10.1985", "Huế"],
+    ]);
+
+    const result = await importRosterWorkbook(buffer, {
+      fileName: "roster.xlsx",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.intakeState).toBe("review_required");
+    expect(result.fallbackUsed).toBe(true);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "smart_intake_ai_fallback",
+          message: expect.stringMatching(/quota/i),
         }),
       ]),
     );
