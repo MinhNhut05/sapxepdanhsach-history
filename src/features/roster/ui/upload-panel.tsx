@@ -3,11 +3,13 @@
 import { useState } from "react";
 
 import {
-  createEmptyImportSummary,
   createUploadError,
   type ImportResultPayload,
   type ImportState,
 } from "./import-state";
+import { ImportIssuesTable } from "./import-issues-table";
+import { ImportPreviewTable } from "./import-preview-table";
+import { ImportSummary } from "./import-summary";
 
 export function UploadPanel() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -102,22 +104,16 @@ export function UploadPanel() {
       </div>
 
       {result && !result.ok ? (
-        <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--danger-soft)]/50 p-4">
-          <p className="field-label">Phản hồi server</p>
-          <ul className="mt-3 space-y-2 text-sm text-[var(--text-primary)]">
-            {result.issues.map((issue) => (
-              <li key={`${issue.code}-${issue.row ?? "none"}-${issue.column ?? "none"}`}>
-                {issue.message}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ImportIssuesTable issues={result.issues} />
       ) : null}
 
       {result && result.ok ? (
-        <div className="rounded-2xl border border-[var(--border-soft)] bg-[var(--success-soft)]/55 p-4 text-sm text-[var(--text-primary)]">
-          Server đã trả về dữ liệu hợp lệ. Ở bước tiếp theo, bảng preview và bảng
-          lỗi chi tiết sẽ hiển thị ngay dưới vùng upload này.
+        <div className="space-y-5">
+          <ImportSummary summary={result.summary} />
+          <ImportPreviewTable students={result.students} />
+          {result.issues.length > 0 ? (
+            <ImportIssuesTable issues={result.issues} />
+          ) : null}
         </div>
       ) : null}
     </div>
