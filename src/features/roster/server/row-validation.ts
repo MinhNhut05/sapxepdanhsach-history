@@ -125,9 +125,7 @@ function toOptionalTextValue(
   }
 
   const rawText = stringifyCellValue(getCellValue(values, columnNumber));
-  const normalized = normalizeVietnameseText(rawText);
-
-  return normalized ? normalized : null;
+  return rawText ? rawText : null;
 }
 
 export function isBlankWorkbookRow(values: ReadonlyArray<unknown>): boolean {
@@ -218,6 +216,10 @@ export function validateWorkbookRow({
     note: toOptionalTextValue(values, columns.note),
   };
 
+  const canonicalNote = rawRecord.note
+    ? normalizeVietnameseText(rawRecord.note) || null
+    : null;
+
   const canonicalRecord: CanonicalStudentRecord = {
     rowIndex: rowNumber,
     raw: rawRecord,
@@ -234,7 +236,7 @@ export function validateWorkbookRow({
         .join(" "),
       birthDateIso: parsedBirthDate.birthDateIso,
       birthPlace: toDisplayNameCase(rawRecord.birthPlace),
-      note: rawRecord.note,
+      note: canonicalNote,
     },
     birthDateIso: parsedBirthDate.birthDateIso,
   };
@@ -275,7 +277,7 @@ export function validateWorkbookRow({
           rowNumber,
           OPTIONAL_ROSTER_HEADERS.note,
           rawRecord.note,
-          canonicalRecord.canonical.note ?? "",
+          canonicalNote ?? "",
         )
       : null,
   ].filter((issue): issue is ImportIssue => issue !== null);

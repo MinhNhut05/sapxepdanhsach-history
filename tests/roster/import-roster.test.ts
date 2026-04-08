@@ -21,7 +21,15 @@ describe("importRosterWorkbook", () => {
     ]);
     const withNoteBuffer = await buildWorkbookBuffer([
       ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH", "GHI CHÚ"],
-      ["K19B", "MS010", "Lê Minh", "Châu", "2024-03-15", "Quảng Trị", "Có mặt"],
+      [
+        "K19B",
+        "MS010",
+        "Lê Minh",
+        "Châu",
+        "2024-03-15",
+        "Quảng Trị",
+        "  Có mặt  ",
+      ],
     ]);
 
     const withoutNoteResult = await importRosterWorkbook(withoutNoteBuffer);
@@ -41,6 +49,7 @@ describe("importRosterWorkbook", () => {
       },
     });
     expect(withNoteResult.students[0]?.canonical.note).toBe("Có mặt");
+    expect(withNoteResult.students[0]?.raw.note).toBe("  Có mặt  ");
   });
 
   it("blocks duplicate MSHV values", async () => {
