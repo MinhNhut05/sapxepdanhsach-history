@@ -1,5 +1,9 @@
-import type { CanonicalStudentRecord } from "@/features/roster/domain/student-record";
 import type { ImportIssue } from "@/features/roster/domain/import-issue";
+import type {
+  IntakeFlowState,
+  IntakeReviewPayload,
+} from "@/features/roster/domain/intake-review";
+import type { CanonicalStudentRecord } from "@/features/roster/domain/student-record";
 
 export const IMPORT_STATES = [
   "idle",
@@ -9,6 +13,8 @@ export const IMPORT_STATES = [
 ] as const;
 
 export type ImportState = (typeof IMPORT_STATES)[number];
+
+export type IntakeSourceFormat = "xlsx" | "xls" | "csv" | "unknown";
 
 export interface ImportSummaryData {
   worksheetName: string | null;
@@ -21,6 +27,12 @@ export interface ImportSummaryData {
 
 export interface ImportResultPayload {
   ok: boolean;
+  sourceFileName?: string | null;
+  intakeState: IntakeFlowState;
+  sourceFormat: IntakeSourceFormat;
+  requiresReview: boolean;
+  fallbackUsed: boolean;
+  review?: IntakeReviewPayload;
   summary: ImportSummaryData;
   students: CanonicalStudentRecord[];
   issues: ImportIssue[];
@@ -40,6 +52,11 @@ export function createEmptyImportSummary(): ImportSummaryData {
 export function createUploadError(message: string): ImportResultPayload {
   return {
     ok: false,
+    sourceFileName: null,
+    intakeState: "failed",
+    sourceFormat: "unknown",
+    requiresReview: false,
+    fallbackUsed: false,
     summary: {
       ...createEmptyImportSummary(),
       blockingIssues: 1,
