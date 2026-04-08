@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import HomePage from "../../src/app/page";
@@ -34,14 +34,16 @@ describe("HomePage", () => {
 
     render(<HomePage />);
 
+    await waitFor(() => {
+      expect(
+        screen.getByText("Chưa có saved run nào còn trong retention window."),
+      ).toBeInTheDocument();
+    });
+
     expect(
       screen.getByRole("heading", { level: 1, name: "ExamRoomAllocator" }),
     ).toBeInTheDocument();
     expect(screen.getByText(/Không gian điều phối/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Tệp roster/i)).toBeInTheDocument();
-
-    expect(
-      await screen.findByText("Chưa có saved run nào còn trong retention window."),
-    ).toBeInTheDocument();
   });
 });

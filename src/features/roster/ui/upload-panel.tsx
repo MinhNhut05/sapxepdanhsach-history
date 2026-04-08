@@ -80,6 +80,8 @@ export function UploadPanel({ onImportResultChange }: UploadPanelProps) {
     }
 
     setStatus("uploading");
+    setResult(null);
+    onImportResultChange?.(null);
 
     const formData = new FormData();
     formData.set("file", selectedFile);
@@ -90,17 +92,23 @@ export function UploadPanel({ onImportResultChange }: UploadPanelProps) {
         body: formData,
       });
       const payload = (await response.json()) as ImportResultPayload;
+      const enrichedPayload = {
+        ...payload,
+        sourceFileName: selectedFile.name,
+      } satisfies ImportResultPayload;
 
-      setResult(payload);
-      onImportResultChange?.(payload);
-      setStatus(payload.ok ? "success" : "error");
+      setResult(enrichedPayload);
+      setStatus(enrichedPayload.ok ? "success" : "error");
+      onImportResultChange?.(enrichedPayload);
     } catch {
-      const uploadError = createUploadError(
-        "Không thể kết nối tới API import roster lúc này.",
-      );
-      setResult(uploadError);
-      onImportResultChange?.(uploadError);
+      const errorPayload = {
+        ...createUploadError("Không thể kết nối tới API import roster lúc này."),
+        sourceFileName: selectedFile.name,
+      } satisfies ImportResultPayload;
+
+      setResult(errorPayload);
       setStatus("error");
+      onImportResultChange?.(errorPayload);
     }
   }
 

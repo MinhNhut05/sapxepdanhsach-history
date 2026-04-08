@@ -30,6 +30,7 @@ export type BirthDateParseResult =
 
 const EXCEL_EPOCH_UTC = Date.UTC(1899, 11, 30);
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const MIN_SUPPORTED_BIRTH_YEAR = 1900;
 
 function isLeapYear(year: number): boolean {
   return year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
@@ -96,7 +97,7 @@ function resolveTextBirthYear(
     .filter(
       (year, index, years) =>
         Number.isInteger(year) &&
-        year >= 1900 &&
+        year >= MIN_SUPPORTED_BIRTH_YEAR &&
         year <= currentYear &&
         years.indexOf(year) === index,
     );
@@ -197,7 +198,7 @@ function parseTextDate(value: string): BirthDateParseResult {
     };
   }
 
-  const dayFirstMatch = trimmedValue.match(/^([0-9]{1,2})([\/\-.])([0-9]{1,2})\2([0-9]{3,4})$/);
+  const dayFirstMatch = trimmedValue.match(/^(\d{1,2})([\/\-.])(\d{1,2})\2(\d{3,4})$/);
 
   if (!dayFirstMatch) {
     return {

@@ -3,8 +3,8 @@
 **Created:** 2026-04-08
 **Mode:** yolo
 **Granularity:** coarse
-**Phases:** 4
-**Coverage:** 36/36 v1 requirements mapped
+**Phases:** 5
+**Coverage:** 46/46 active requirements mapped
 
 ## Overview
 
@@ -13,8 +13,9 @@ This roadmap follows the dependency chain surfaced by research:
 2. Deterministic allocation engine second
 3. Review and manual correction workflow third
 4. Export, print, history, and operational safeguards last
+5. Smart intake hardening fifth
 
-All v1 requirements map to exactly one phase.
+All currently active requirements map to exactly one phase.
 
 ## Phase Summary
 
@@ -24,6 +25,7 @@ All v1 requirements map to exactly one phase.
 | 2 | Allocation Engine | Deliver deterministic room allocation with three strategies, room balancing, Vietnamese ordering, and reproducible persisted runs | ALOC-01, ALOC-02, ALOC-03, ALOC-04, ALOC-05, ALOC-06, ALOC-07, ALOC-08, HIST-01, HIST-03, HIST-04 | 4 |
 | 3 | Review & Manual Editing | Let users inspect fairness, preview results, and safely adjust allocations with drag-and-drop/manual edits | PREV-01, PREV-02, PREV-03, PREV-04, PREV-05, EDIT-01, EDIT-02, EDIT-03, EDIT-04, EDIT-05 | 4 |
 | 4 | Output & Operations | Produce final usable outputs, reopening/history flows, and retention/operational safeguards | EXPT-01, EXPT-02, EXPT-03, EXPT-04, EXPT-05, EXPT-06, HIST-02, SAFE-03 | 4 |
+| 5 | Smart Intake Core | Harden roster intake so messy spreadsheet inputs can still be recognized, repaired safely, reviewed, and handed to the current allocation flow | INTK-01, INTK-02, INTK-03, INTK-04, REVW-01, REVW-02, REVW-03, AUDT-01, SAFE-04, SAFE-05 | 4 |
 
 ## Phase Details
 
@@ -108,19 +110,41 @@ All v1 requirements map to exactly one phase.
 3. Exported Excel and printed outputs match the approved preview exactly for ordering, room assignment, and SBD values.
 4. User reopens previously saved runs, while stored data follows the defined retention/cleanup policy.
 
+### Phase 5: Smart Intake Core
+**Goal:** Harden intake so users can feed noisy roster files into one smart flow that preserves the clean-file fast path, routes uncertain repairs into review, and keeps every machine-generated change auditable.
+
+**Requirements:**
+- INTK-01
+- INTK-02
+- INTK-03
+- INTK-04
+- REVW-01
+- REVW-02
+- REVW-03
+- AUDT-01
+- SAFE-04
+- SAFE-05
+
+**Success criteria:**
+1. User can upload `.xlsx`, `.xls`, or `.csv` files with mild layout/header noise and still reach a recoverable intake result from one shared flow.
+2. Clean files proceed directly into the existing allocation flow, while messy files branch into an intake review workspace with high/medium/low-confidence mapping and repair decisions.
+3. Sensitive fields such as `MSHV` and `Lớp` are never silently auto-corrected; safe normalizations can auto-apply only when confidence is high and the audit trail records what changed.
+4. If the AI provider is unavailable, the app still offers rule-based parsing plus review instead of blocking the operator.
+
 ## Phase Ordering Rationale
 
 - Phase 1 must come first because import correctness, normalization, and validation are prerequisites for everything else.
 - Phase 2 comes next because allocation logic and persisted runs define the authoritative state used by preview, editing, export, and history.
 - Phase 3 depends on Phase 2 because manual editing must operate on valid saved allocations with invariant checks.
 - Phase 4 is last because outputs and reopening flows only make sense once import, allocation, and editing are stable.
+- Phase 5 follows the shipped v1 workflow so smart intake can layer on top of a stable allocation/review/output contract instead of rebuilding downstream phases at the same time.
 
 ## Coverage Check
 
 | Category | Count |
 |----------|-------|
-| v1 requirements total | 36 |
-| Mapped to phases | 36 |
+| Active requirements total | 46 |
+| Mapped to phases | 46 |
 | Unmapped | 0 |
 
 Coverage status: ✓ Complete
@@ -130,6 +154,20 @@ Coverage status: ✓ Complete
 - **Phase 2:** Needs deeper planning around fairness metrics, deterministic tie-break rules, and strategy-specific validation.
 - **Phase 3:** Needs careful planning for drag-and-drop state flow and post-edit invariant enforcement.
 - **Phase 4:** Needs implementation-time validation for workbook formatting parity and print CSS behavior.
+- **Phase 5:** Needs planning around multi-format sniffing, confidence scoring, intake review UX, audit persistence, and AI fallback boundaries.
+
+### Phase 5: Smart Intake Core
+
+**Goal:** Harden intake so messy spreadsheet inputs can still be recognized, repaired safely, reviewed, and handed to the current allocation flow.
+**Requirements**: INTK-01, INTK-02, INTK-03, INTK-04, REVW-01, REVW-02, REVW-03, AUDT-01, SAFE-04, SAFE-05
+**Depends on:** Phase 4
+**Plans:** 4 plans
+
+Plans:
+- [ ] 05-01 — Intake contracts and tolerant file readers
+- [ ] 05-02 — Rule-based smart intake orchestration and audit payload
+- [ ] 05-03 — Review workspace and allocation gating
+- [ ] 05-04 — AI assistance, fallback hardening, and regression coverage
 
 ---
-*Roadmap created: 2026-04-08*
+*Last updated: 2026-04-08 after Phase 5 planning*

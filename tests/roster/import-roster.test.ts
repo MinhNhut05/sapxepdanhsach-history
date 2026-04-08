@@ -242,4 +242,106 @@ describe("importRosterWorkbook", () => {
       ]),
     );
   });
+
+  it("emits warnings for same name plus birth date with different MSHV", async () => {
+    const buffer = await buildWorkbookBuffer([
+      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+      ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+      ["K19B", "MS002", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+    ]);
+
+    const result = await importRosterWorkbook(buffer);
+
+    expect(result.ok).toBe(true);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: "warning",
+          code: "same_name_birth_date_different_student_code",
+        }),
+      ]),
+    );
+  });
+
+  it("warns about blank rows inside the data region", async () => {
+    const buffer = await buildWorkbookBuffer([
+      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+      ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+      ["", "", "", "", "", ""],
+      ["K19A", "MS002", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
+    ]);
+
+    const result = await importRosterWorkbook(buffer);
+
+    expect(result.ok).toBe(true);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: "warning",
+          code: "blank_row_skipped",
+        }),
+      ]),
+    );
+  });
+
+  it("accepts Vietnamese day-first birth dates and warns when a year is auto-repaired", async () => {
+    const buffer = await buildWorkbookBuffer([
+      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+      ["K19A", "MS001", "Nguyễn Văn", "An", "03/10/1985", "Huế"],
+      ["K19A", "MS002", "Trần Thị", "Bình", "02/01/986", "Đà Nẵng"],
+    ]);
+
+    const result = await importRosterWorkbook(buffer);
+
+    expect(result.ok).toBe(true);
+
+    if (!result.ok) {
+      return;
+    }
+
+    expect(result.students.find((student) => student.rowIndex === 2)?.birthDateIso).toBe(
+      "1985-10-03",
+    );
+    expect(result.students.find((student) => student.rowIndex === 3)?.birthDateIso).toBe(
+      "1986-01-02",
+    );
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: "warning",
+          code: "normalized_birth_date_short_year",
+          row: 3,
+          column: "NGÀY SINH",
+        }),
+      ]),
+    );
+  });
+
+  it("records info issues when canonical values differ from raw values", async () => {
+    const buffer = await buildWorkbookBuffer([
+      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+      ["  K19A ", " MS001 ", "  nGUYỄN   văn ", " an ", "2024-01-13", " huế "],
+    ]);
+
+    const result = await importRosterWorkbook(buffer);
+
+    expect(result.ok).toBe(true);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: "info",
+          row: 2,
+        }),
+      ]),
+    );
+
+    const normalizedStudent = result.students[0] ?? result.stagedStudents?.[0];
+
+    expect(normalizedStudent).toMatchObject({
+      canonical: {
+        firstName: "An",
+        middleName: "Nguyễn Văn",
+      },
+    });
+  });
 });
