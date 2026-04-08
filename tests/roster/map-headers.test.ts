@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { detectHeaderRow } from "../../src/features/roster/server/detect-header-row";
 import {
   mapRosterHeaders,
   OPTIONAL_ROSTER_HEADERS,
@@ -54,6 +55,50 @@ describe("mapRosterHeaders", () => {
         note: 7,
       },
     });
+  });
+
+  it("maps alias headers to canonical columns", () => {
+    const aliasResult = mapRosterHeaders([
+      "Tên lớp",
+      "Mã HV",
+      "Ho lot",
+      "First Name",
+      "DOB",
+      "Noi sinh",
+      "Note",
+    ]);
+
+    expect(aliasResult).toMatchObject({
+      ok: true,
+      columns: {
+        className: 1,
+        studentCode: 2,
+        middleName: 3,
+        firstName: 4,
+        birthDate: 5,
+        birthPlace: 6,
+        note: 7,
+      },
+    });
+  });
+
+  it("tolerates a title row above the header row", () => {
+    const detected = detectHeaderRow([
+      ["Danh sách dự thi học kỳ 1"],
+      [],
+      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+      ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+    ]);
+
+    expect(detected.headerRowIndex).toBe(2);
+    expect(detected.headerValues).toEqual([
+      "Lớp",
+      "MSHV",
+      "HỌ LÓT",
+      "TÊN",
+      "NGÀY SINH",
+      "NƠI SINH",
+    ]);
   });
 
   it("keeps the optional note column absent without failing", () => {
