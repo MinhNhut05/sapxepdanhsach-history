@@ -5,19 +5,20 @@ export const SUPPORTED_TEXT_BIRTH_DATE_FORMATS = [
   "d/M/yyyy",
   "dd-MM-yyyy",
   "d-M-yyyy",
+  "dd.MM.yyyy",
+  "d.M.yyyy",
   "yyyy-MM-dd",
 ] as const;
 
 type BirthDateParseErrorCode =
   | "birth_date_required"
-  | "invalid_birth_date"
-  | "ambiguous_birth_date";
+  | "invalid_birth_date";
 
 export type BirthDateParseResult =
   | {
       ok: true;
       birthDateIso: string;
-      source: "date-object" | "excel-serial" | "text";
+      source: "date-object" | "excel-serial" | "text" | "text-short-year";
     }
   | {
       ok: false;
@@ -73,6 +74,41 @@ function isValidCalendarDate(year: number, month: number, day: number): boolean 
   }
 
   return true;
+}
+
+function resolveTextBirthYear(
+  yearText: string,
+): { year: number; source: "text" | "text-short-year" } | null {
+  if (/^\d{4}$/.test(yearText)) {
+    return {
+      year: Number(yearText),
+      source: "text",
+    };
+  }
+
+  if (!/^\d{3}$/.test(yearText)) {
+    return null;
+  }
+
+  const currentYear = new Date().getFullYear();
+  const candidateYears = [`1${yearText}`, `2${yearText}`]
+    .map(Number)
+    .filter(
+      (year, index, years) =>
+        Number.isInteger(year) &&
+        year >= 1900 &&
+        year <= currentYear &&
+        years.indexOf(year) === index,
+    );
+
+  if (candidateYears.length !== 1) {
+    return null;
+  }
+
+  return {
+    year: candidateYears[0],
+    source: "text-short-year",
+  };
 }
 
 function parseDateObject(value: Date): BirthDateParseResult {
@@ -161,7 +197,7 @@ function parseTextDate(value: string): BirthDateParseResult {
     };
   }
 
-  const dayFirstMatch = trimmedValue.match(/^(\d{1,2})([/-])(\d{1,2})\2(\d{4})$/);
+  const dayFirstMatch = trimmedValue.match(/^([0-9]{1,2})([\/\-.])([0-9]{1,2})\2([0-9]{3,4})$/);
 
   if (!dayFirstMatch) {
     return {
@@ -176,17 +212,19 @@ function parseTextDate(value: string): BirthDateParseResult {
   const [, dayText, , monthText, yearText] = dayFirstMatch;
   const day = Number(dayText);
   const month = Number(monthText);
-  const year = Number(yearText);
+  const resolvedYear = resolveTextBirthYear(yearText);
 
-  if (day <= 12 && month <= 12) {
+  if (!resolvedYear) {
     return {
       ok: false,
       severity: "blocking",
-      code: "ambiguous_birth_date",
-      message: "Ngày sinh dạng văn bản bị mơ hồ và không được đoán tự động.",
+      code: "invalid_birth_date",
+      message: "Ngày sinh không đúng định dạng hỗ trợ.",
       rawValue: value,
     };
   }
+
+  const year = resolvedYear.year;
 
   if (!isValidCalendarDate(year, month, day)) {
     return {
@@ -201,7 +239,7 @@ function parseTextDate(value: string): BirthDateParseResult {
   return {
     ok: true,
     birthDateIso: toIsoDate(year, month, day),
-    source: "text",
+    source: resolvedYear.source,
   };
 }
 

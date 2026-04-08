@@ -1,13 +1,21 @@
+import type {
+  IntakeFlowState,
+  IntakeReviewPayload,
+} from "@/features/roster/domain/intake-review";
 import type { CanonicalStudentRecord } from "@/features/roster/domain/student-record";
 import type { ImportIssue } from "@/features/roster/domain/import-issue";
 import { mapRosterHeaders } from "@/features/roster/lib/map-headers";
 import { sortStudentsByVietnameseName } from "@/features/roster/lib/sort-students";
+import type { IntakeSourceFormat } from "@/features/roster/ui/import-state";
 
-import { readWorkbook } from "./read-workbook";
+import { buildIntakeReview } from "./build-intake-review";
+import { detectHeaderRow } from "./detect-header-row";
+import { readIntakeFile } from "./read-intake-file";
 import {
   findDuplicateStudentCodeIssues,
   findSameNameBirthDateWarnings,
   isBlankWorkbookRow,
+  type RepairProposal,
   validateWorkbookRow,
 } from "./row-validation";
 
@@ -22,9 +30,20 @@ export interface RosterImportSummary {
 
 export interface RosterImportResult {
   ok: boolean;
+  intakeState: IntakeFlowState;
+  sourceFormat: IntakeSourceFormat;
+  requiresReview: boolean;
+  fallbackUsed: boolean;
   summary: RosterImportSummary;
   students: CanonicalStudentRecord[];
+  stagedStudents: CanonicalStudentRecord[];
   issues: ImportIssue[];
+  review?: IntakeReviewPayload;
+}
+
+interface ImportRosterWorkbookOptions {
+  fileName?: string;
+  mimeType?: string;
 }
 
 function createSummary(
@@ -52,40 +71,135 @@ function blankRowWarning(rowNumber: number): ImportIssue {
   };
 }
 
-export async function importRosterWorkbook(
-  input: ArrayBuffer | Buffer | Uint8Array,
-): Promise<RosterImportResult> {
-  const workbook = await readWorkbook(input);
-
-  if (!workbook.ok) {
-    return {
-      ok: false,
-      summary: createSummary(null, 0, workbook.issues, []),
-      students: [],
-      issues: workbook.issues,
-    };
+function toHeaderAliasRepairs(
+  headerValues: ReadonlyArray<unknown>,
+  columns: ReturnType<typeof mapRosterHeaders>["columns"],
+): RepairProposal[] {
+  if (!columns) {
+    return [];
   }
 
-  const headerMapResult = mapRosterHeaders(workbook.headerRow.values);
+  const headerEntries = [
+    ["className", columns.className, "Lớp"],
+    ["studentCode", columns.studentCode, "MSHV"],
+    ["middleName", columns.middleName, "HỌ LÓT"],
+    ["firstName", columns.firstName, "TÊN"],
+    ["birthDate", columns.birthDate, "NGÀY SINH"],
+    ["birthPlace", columns.birthPlace, "NƠI SINH"],
+    ["note", columns.note, "GHI CHÚ"],
+  ] as const;
+
+  return headerEntries.flatMap(([fieldKey, columnNumber, label]) => {
+    if (!columnNumber) {
+      return [];
+    }
+
+    const rawValue = String(headerValues[columnNumber - 1] ?? "");
+
+    if (!rawValue || rawValue === label) {
+      return [];
+    }
+
+    return [
+      {
+        fieldKey: "header" as const,
+        label,
+        rawValue,
+        proposedValue: label,
+        repairType: "header_alias_mapping" as const,
+        source: "rule" as const,
+        confidence: "high" as const,
+        reason: `Nhận diện tiêu đề cột biến thể "${rawValue}" cho trường ${label}.`,
+        sensitive: fieldKey === "className" || fieldKey === "studentCode",
+      },
+    ];
+  });
+}
+
+function failureResult(
+  sourceFormat: IntakeSourceFormat,
+  worksheetName: string | null,
+  totalRowsRead: number,
+  issues: ImportIssue[],
+): RosterImportResult {
+  return {
+    ok: false,
+    intakeState: "failed",
+    sourceFormat,
+    requiresReview: false,
+    fallbackUsed: false,
+    summary: createSummary(worksheetName, totalRowsRead, issues, []),
+    students: [],
+    stagedStudents: [],
+    issues,
+  };
+}
+
+export async function importRosterWorkbook(
+  input: ArrayBuffer | Buffer | Uint8Array,
+  options: ImportRosterWorkbookOptions = {},
+): Promise<RosterImportResult> {
+  const arrayBuffer =
+    input instanceof ArrayBuffer
+      ? input
+      : input instanceof Uint8Array
+        ? input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength)
+        : input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
+
+  const intakeFile = await readIntakeFile(arrayBuffer, {
+    fileName: options.fileName ?? "roster.xlsx",
+    mimeType: options.mimeType,
+  });
+
+  if (intakeFile.rowCount === 0) {
+    return failureResult(intakeFile.sourceFormat, intakeFile.sheetName, 0, [
+      {
+        severity: "blocking",
+        code: "empty_workbook",
+        message: "Tệp intake không có dữ liệu để import.",
+      },
+    ]);
+  }
+
+  const detectedHeader = detectHeaderRow(intakeFile.rows);
+  const headerRowNumber = detectedHeader.headerRowIndex + 1;
+  const headerMapResult = mapRosterHeaders(detectedHeader.headerValues);
 
   if (!headerMapResult.ok || !headerMapResult.columns) {
-    return {
-      ok: false,
-      summary: createSummary(
-        workbook.worksheetName,
-        workbook.dataRows.length,
-        headerMapResult.issues,
-        [],
-      ),
-      students: [],
-      issues: headerMapResult.issues,
-    };
+    return failureResult(
+      intakeFile.sourceFormat,
+      intakeFile.sheetName,
+      Math.max(intakeFile.rowCount - detectedHeader.headerRowIndex - 1, 0),
+      headerMapResult.issues,
+    );
   }
 
   const rowIssues: ImportIssue[] = [];
   const records: CanonicalStudentRecord[] = [];
+  const headerRepairs = toHeaderAliasRepairs(
+    detectedHeader.headerValues,
+    headerMapResult.columns,
+  );
 
-  for (const row of workbook.dataRows) {
+  if (detectedHeader.headerRowIndex > 0) {
+    rowIssues.push({
+      severity: "warning",
+      code: "title_row_skipped",
+      row: 1,
+      message: "Đã bỏ qua title row trước phần header dữ liệu.",
+    });
+  }
+
+  const repairs: RepairProposal[] = [...headerRepairs];
+
+  const dataRows = intakeFile.rows
+    .slice(detectedHeader.headerRowIndex + 1)
+    .map((values, index) => ({
+      rowNumber: headerRowNumber + index + 1,
+      values,
+    }));
+
+  for (const row of dataRows) {
     if (isBlankWorkbookRow(row.values)) {
       rowIssues.push(blankRowWarning(row.rowNumber));
       continue;
@@ -98,6 +212,7 @@ export async function importRosterWorkbook(
     });
 
     rowIssues.push(...validatedRow.issues);
+    repairs.push(...validatedRow.repairs);
 
     if (validatedRow.record) {
       records.push(validatedRow.record);
@@ -110,25 +225,38 @@ export async function importRosterWorkbook(
   const blockingIssues = issues.filter((issue) => issue.severity === "blocking");
 
   if (blockingIssues.length > 0) {
-    return {
-      ok: false,
-      summary: createSummary(workbook.worksheetName, workbook.dataRows.length, issues, []),
-      students: [],
+    return failureResult(
+      intakeFile.sourceFormat,
+      intakeFile.sheetName,
+      dataRows.length,
       issues,
-    };
+    );
   }
 
   const sortedStudents = sortStudentsByVietnameseName(records);
+  const review = buildIntakeReview({
+    students: sortedStudents,
+    repairs,
+    issues,
+  });
+
+  const ready = review.unresolvedCount === 0;
 
   return {
     ok: true,
+    intakeState: ready ? "ready" : "review_required",
+    sourceFormat: intakeFile.sourceFormat,
+    requiresReview: !ready,
+    fallbackUsed: intakeFile.sourceFormat === "csv",
+    review,
     summary: createSummary(
-      workbook.worksheetName,
-      workbook.dataRows.length,
+      intakeFile.sheetName,
+      dataRows.length,
       issues,
       sortedStudents,
     ),
-    students: sortedStudents,
+    students: ready ? sortedStudents : [],
+    stagedStudents: review.stagedStudents,
     issues,
   };
 }

@@ -53,7 +53,7 @@ function inferSourceFormat(fileName: string): IntakeSourceFormat {
 function toWorkbookRows(sheet: XLSX.WorkSheet): string[][] {
   const rows = XLSX.utils.sheet_to_json<(string | number | boolean | Date | null)[]>(sheet, {
     header: 1,
-    raw: false,
+    raw: true,
     blankrows: false,
     defval: "",
   });
