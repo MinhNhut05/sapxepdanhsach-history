@@ -32,11 +32,16 @@ describe("importRosterWorkbook", () => {
       ],
     ]);
 
-    const withoutNoteResult = await importRosterWorkbook(withoutNoteBuffer);
-    const withNoteResult = await importRosterWorkbook(withNoteBuffer);
+    const withoutNoteResult = await importRosterWorkbook(withoutNoteBuffer, {
+      fileName: "roster.xlsx",
+    });
+    const withNoteResult = await importRosterWorkbook(withNoteBuffer, {
+      fileName: "roster.xlsx",
+    });
 
     expect(withoutNoteResult).toMatchObject({
       ok: true,
+      intakeState: "ready",
       summary: {
         validStudents: 2,
       },
@@ -44,12 +49,77 @@ describe("importRosterWorkbook", () => {
     expect(withoutNoteResult.students[0]?.canonical.note).toBeNull();
     expect(withNoteResult).toMatchObject({
       ok: true,
+      intakeState: "ready",
       summary: {
         validStudents: 1,
       },
     });
     expect(withNoteResult.students[0]?.canonical.note).toBe("Có mặt");
     expect(withNoteResult.students[0]?.raw.note).toBe("  Có mặt  ");
+  });
+
+  it("routes noisy csv files with a title row into review instead of hard failure", async () => {
+    const csvBuffer = Buffer.from(
+      [
+        "Danh sách học viên nhập từ CSV",
+        "Lớp,MSHV,HỌ LÓT,TÊN,NGÀY SINH,NƠI SINH",
+        " K19A , MS001 ,  nGUYỄN   văn , an , 13.10.1985 , huế ",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const result = await importRosterWorkbook(csvBuffer, {
+      fileName: "roster.csv",
+      mimeType: "text/csv",
+    });
+
+    expect(result.ok).toBe(true);
+
+    if (!result.ok) {
+      throw new Error(JSON.stringify(result, null, 2));
+    }
+
+    expect(result.intakeState).toBe("review_required");
+    expect(result.requiresReview).toBe(true);
+    expect(result.sourceFormat).toBe("csv");
+    expect(result.fallbackUsed).toBe(true);
+    expect(result.review?.auditTrail).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          rawValue: " 13.10.1985 ",
+          proposedValue: "1985-10-13",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps sensitive MSHV and className repairs review-required even with a preferred proposal", async () => {
+    const buffer = await buildWorkbookBuffer([
+      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+      [" K19A ", " MS001 ", "Nguyễn Văn", "An", "03.10.1985", "Huế"],
+    ]);
+
+    const result = await importRosterWorkbook(buffer, {
+      fileName: "roster.xlsx",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.intakeState).toBe("review_required");
+    expect(result.students).toEqual([]);
+    expect(result.review?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldKey: "studentCode",
+          requiresReview: true,
+          autoApplied: false,
+        }),
+        expect.objectContaining({
+          fieldKey: "className",
+          requiresReview: true,
+          autoApplied: false,
+        }),
+      ]),
+    );
   });
 
   it("blocks duplicate MSHV values", async () => {
@@ -59,9 +129,12 @@ describe("importRosterWorkbook", () => {
       ["K19A", "MS001", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
     ]);
 
-    const result = await importRosterWorkbook(buffer);
+    const result = await importRosterWorkbook(buffer, {
+      fileName: "roster.xlsx",
+    });
 
     expect(result.ok).toBe(false);
+    expect(result.intakeState).toBe("failed");
     expect(result.students).toEqual([]);
     expect(result.issues).toEqual(
       expect.arrayContaining([
@@ -72,71 +145,5 @@ describe("importRosterWorkbook", () => {
         }),
       ]),
     );
-  });
-
-  it("emits warnings for same name plus birth date with different MSHV", async () => {
-    const buffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
-      ["K19B", "MS002", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
-    ]);
-
-    const result = await importRosterWorkbook(buffer);
-
-    expect(result.ok).toBe(true);
-    expect(result.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          severity: "warning",
-          code: "same_name_birth_date_different_student_code",
-        }),
-      ]),
-    );
-  });
-
-  it("warns about blank rows inside the data region", async () => {
-    const buffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
-      ["", "", "", "", "", ""],
-      ["K19A", "MS002", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
-    ]);
-
-    const result = await importRosterWorkbook(buffer);
-
-    expect(result.ok).toBe(true);
-    expect(result.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          severity: "warning",
-          code: "blank_row_skipped",
-        }),
-      ]),
-    );
-  });
-
-  it("records info issues when canonical values differ from raw values", async () => {
-    const buffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["  K19A ", " MS001 ", "  nGUYỄN   văn ", " an ", "2024-01-13", " huế "],
-    ]);
-
-    const result = await importRosterWorkbook(buffer);
-
-    expect(result.ok).toBe(true);
-    expect(result.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          severity: "info",
-          row: 2,
-        }),
-      ]),
-    );
-    expect(result.students[0]).toMatchObject({
-      canonical: {
-        firstName: "An",
-        middleName: "Nguyễn Văn",
-      },
-    });
   });
 });

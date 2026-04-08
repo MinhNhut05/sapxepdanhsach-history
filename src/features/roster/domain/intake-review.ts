@@ -1,3 +1,5 @@
+import type { CanonicalStudentRecord } from "@/features/roster/domain/student-record";
+
 export type IntakeFlowState = "ready" | "review_required" | "failed";
 
 export type IntakeConfidenceBand = "high" | "medium" | "low";
@@ -27,12 +29,23 @@ export interface IntakeReviewItem {
   reason: string;
   source: "rule" | "ai";
   sensitive: boolean;
+  requiresReview: boolean;
+  autoApplied: boolean;
+}
+
+export interface IntakeConfidenceSummary {
+  high: number;
+  medium: number;
+  low: number;
 }
 
 export interface IntakeReviewPayload {
   state: IntakeFlowState;
   confidence: IntakeConfidenceBand;
   summary: string;
+  confidenceSummary: IntakeConfidenceSummary;
+  unresolvedCount: number;
   items: IntakeReviewItem[];
-  audit: IntakeAuditRecord[];
+  auditTrail: IntakeAuditRecord[];
+  stagedStudents: CanonicalStudentRecord[];
 }

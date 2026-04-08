@@ -1,4 +1,7 @@
 import type {
+  IntakeConfidenceBand,
+} from "@/features/roster/domain/intake-review";
+import type {
   CanonicalStudentRecord,
   RawBirthDateValue,
   RawStudentFieldValues,
@@ -21,10 +24,51 @@ export interface ValidateWorkbookRowInput {
   columns: RosterHeaderMap;
 }
 
+export interface RepairProposal {
+  fieldKey:
+    | keyof Pick<
+        RawStudentFieldValues,
+        | "className"
+        | "studentCode"
+        | "middleName"
+        | "firstName"
+        | "birthDate"
+        | "birthPlace"
+        | "note"
+      >
+    | "header";
+  label: string;
+  rawValue: string | null;
+  proposedValue: string | null;
+  repairType:
+    | "whitespace_cleanup"
+    | "casing_normalization"
+    | "birth_date_cleanup"
+    | "birth_place_cleanup"
+    | "note_cleanup"
+    | "header_alias_mapping";
+  source: "rule" | "ai";
+  confidence: IntakeConfidenceBand;
+  reason: string;
+  sensitive: boolean;
+}
+
 export interface ValidateWorkbookRowResult {
   record?: CanonicalStudentRecord;
   issues: ImportIssue[];
+  repairs: RepairProposal[];
 }
+
+export const SAFE_AUTO_APPLY_REPAIR_TYPES = [
+  "whitespace_cleanup",
+  "casing_normalization",
+  "birth_date_cleanup",
+  "birth_place_cleanup",
+  "note_cleanup",
+  "header_alias_mapping",
+] as const;
+
+export type SafeAutoApplyRepairType = (typeof SAFE_AUTO_APPLY_REPAIR_TYPES)[number];
 
 const REQUIRED_FIELD_LABELS = {
   className: REQUIRED_ROSTER_HEADERS.className,
@@ -128,6 +172,35 @@ function toOptionalTextValue(
   return rawText ? rawText : null;
 }
 
+function pushRepairIfChanged(
+  repairs: RepairProposal[],
+  input: {
+    fieldKey: RepairProposal["fieldKey"];
+    label: string;
+    rawValue: string | null;
+    proposedValue: string | null;
+    repairType: RepairProposal["repairType"];
+    reason: string;
+    sensitive?: boolean;
+  },
+): void {
+  if (input.rawValue === input.proposedValue) {
+    return;
+  }
+
+  repairs.push({
+    fieldKey: input.fieldKey,
+    label: input.label,
+    rawValue: input.rawValue,
+    proposedValue: input.proposedValue,
+    repairType: input.repairType,
+    source: "rule",
+    confidence: "high",
+    reason: input.reason,
+    sensitive: input.sensitive ?? false,
+  });
+}
+
 export function isBlankWorkbookRow(values: ReadonlyArray<unknown>): boolean {
   return values.every((value) => {
     if (value === null || value === undefined) {
@@ -199,11 +272,11 @@ export function validateWorkbookRow({
       message: parsedBirthDate.message,
     });
 
-    return { issues };
+    return { issues, repairs: [] };
   }
 
   if (issues.some((issue) => issue.severity === "blocking")) {
-    return { issues };
+    return { issues, repairs: [] };
   }
 
   const rawRecord: RawStudentFieldValues = {
@@ -282,20 +355,82 @@ export function validateWorkbookRow({
       : null,
   ].filter((issue): issue is ImportIssue => issue !== null);
 
-  if (String(rawBirthDate) !== canonicalRecord.birthDateIso) {
+  if (parsedBirthDate.source === "text-short-year") {
     normalizationIssues.push({
-      severity: "info",
-      code: "normalized_birth_date",
+      severity: "warning",
+      code: "normalized_birth_date_short_year",
       row: rowNumber,
       column: REQUIRED_FIELD_LABELS.birthDate,
       value: stringifyCellValue(rawBirthDate),
-      message: `Ngày sinh đã được chuẩn hóa thành "${canonicalRecord.birthDateIso}".`,
+      message: `Ngày sinh thiếu 1 chữ số năm và đã được chuẩn hóa thành "${canonicalRecord.birthDateIso}".`,
     });
   }
+
+  const repairs: RepairProposal[] = [];
+
+  pushRepairIfChanged(repairs, {
+    fieldKey: "className",
+    label: REQUIRED_FIELD_LABELS.className,
+    rawValue: rawRecord.className,
+    proposedValue: canonicalRecord.canonical.className,
+    repairType: "whitespace_cleanup",
+    reason: "Chuẩn hóa khoảng trắng cho tên lớp.",
+    sensitive: true,
+  });
+  pushRepairIfChanged(repairs, {
+    fieldKey: "studentCode",
+    label: REQUIRED_FIELD_LABELS.studentCode,
+    rawValue: rawRecord.studentCode,
+    proposedValue: canonicalRecord.canonical.studentCode,
+    repairType: "whitespace_cleanup",
+    reason: "Chuẩn hóa khoảng trắng cho MSHV.",
+    sensitive: true,
+  });
+  pushRepairIfChanged(repairs, {
+    fieldKey: "middleName",
+    label: REQUIRED_FIELD_LABELS.middleName,
+    rawValue: rawRecord.middleName,
+    proposedValue: canonicalRecord.canonical.middleName,
+    repairType: "casing_normalization",
+    reason: "Chuẩn hóa viết hoa/thường cho họ lót.",
+  });
+  pushRepairIfChanged(repairs, {
+    fieldKey: "firstName",
+    label: REQUIRED_FIELD_LABELS.firstName,
+    rawValue: rawRecord.firstName,
+    proposedValue: canonicalRecord.canonical.firstName,
+    repairType: "casing_normalization",
+    reason: "Chuẩn hóa viết hoa/thường cho tên.",
+  });
+  pushRepairIfChanged(repairs, {
+    fieldKey: "birthPlace",
+    label: REQUIRED_FIELD_LABELS.birthPlace,
+    rawValue: rawRecord.birthPlace,
+    proposedValue: canonicalRecord.canonical.birthPlace,
+    repairType: "birth_place_cleanup",
+    reason: "Chuẩn hóa nơi sinh để hiển thị nhất quán.",
+  });
+  pushRepairIfChanged(repairs, {
+    fieldKey: "note",
+    label: OPTIONAL_ROSTER_HEADERS.note,
+    rawValue: rawRecord.note,
+    proposedValue: canonicalNote,
+    repairType: "note_cleanup",
+    reason: "Chuẩn hóa ghi chú bằng cách bỏ khoảng trắng thừa.",
+  });
+  pushRepairIfChanged(repairs, {
+    fieldKey: "birthDate",
+    label: REQUIRED_FIELD_LABELS.birthDate,
+    rawValue: stringifyCellValue(rawBirthDate),
+    proposedValue: canonicalRecord.birthDateIso,
+    repairType: "birth_date_cleanup",
+    reason: "Chuẩn hóa ngày sinh về định dạng ISO hỗ trợ.",
+  });
 
   return {
     record: canonicalRecord,
     issues: normalizationIssues,
+    repairs,
   };
 }
 
