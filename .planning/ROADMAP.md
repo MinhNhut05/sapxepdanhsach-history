@@ -3,8 +3,8 @@
 **Created:** 2026-04-08
 **Mode:** yolo
 **Granularity:** coarse
-**Phases:** 5
-**Coverage:** 46/46 active requirements mapped
+**Phases:** 6
+**Coverage:** 51/51 active requirements mapped
 
 ## Overview
 
@@ -12,8 +12,9 @@ This roadmap follows the dependency chain surfaced by research:
 1. Data foundation first
 2. Deterministic allocation engine second
 3. Review and manual correction workflow third
-4. Export, print, history, and operational safeguards last
+4. Export, print, history, and operational safeguards fourth
 5. Smart intake hardening fifth
+6. Customer-feedback hardening sixth
 
 All currently active requirements map to exactly one phase.
 
@@ -26,6 +27,7 @@ All currently active requirements map to exactly one phase.
 | 3 | Review & Manual Editing | Let users inspect fairness, preview results, and safely adjust allocations with drag-and-drop/manual edits | PREV-01, PREV-02, PREV-03, PREV-04, PREV-05, EDIT-01, EDIT-02, EDIT-03, EDIT-04, EDIT-05 | 4 |
 | 4 | Output & Operations | Produce final usable outputs, reopening/history flows, and retention/operational safeguards | EXPT-01, EXPT-02, EXPT-03, EXPT-04, EXPT-05, EXPT-06, HIST-02, SAFE-03 | 4 |
 | 5 | Smart Intake Core | Harden roster intake so messy spreadsheet inputs can still be recognized, repaired safely, reviewed, and handed to the current allocation flow | INTK-01, INTK-02, INTK-03, INTK-04, REVW-01, REVW-02, REVW-03, AUDT-01, SAFE-04, SAFE-05 | 4 |
+| 6 | Customer Feedback Hardening | Resolve customer hardening gaps across sheet detection, strict class fairness, template-locked export parity, room-only template policy, and AI verification gate | CF-IMPORT-01, CF-FAIRNESS-01, CF-EXPORT-01, CF-EXPORT-02, CF-AI-GATE-01 | 4 |
 
 ## Phase Details
 
@@ -131,20 +133,37 @@ All currently active requirements map to exactly one phase.
 3. Sensitive fields such as `MSHV` and `Lớp` are never silently auto-corrected; safe normalizations can auto-apply only when confidence is high and the audit trail records what changed.
 4. If the AI provider is unavailable, the app still offers rule-based parsing plus review instead of blocking the operator.
 
+### Phase 6: Customer Feedback Hardening
+**Goal:** Close customer-reported hardening gaps without rewriting core architecture by adding deterministic worksheet selection, strict class fairness behavior, template-locked export parity, explicit room-only template handling, and deterministic-first AI verification gate behavior.
+
+**Requirements:**
+- CF-IMPORT-01
+- CF-FAIRNESS-01
+- CF-EXPORT-01
+- CF-EXPORT-02
+- CF-AI-GATE-01
+
+**Success criteria:**
+1. Workbook intake deterministically selects the roster sheet even when sheet 1 is blank/title-only, and the selected sheet reason is visible in import metadata.
+2. In strict fairness mode, every class spread across rooms is `<= 1` when feasible; infeasible cases return deterministic fallback output with machine-readable violation reasons.
+3. Export output is generated from a versioned template parity contract, preserving split-name columns and layout/print settings; room-only export follows a defined template mode with explicit fallback metadata.
+4. Pre-export verification always runs deterministic checks, AI advisories cannot override deterministic blockers, and AI provider failure degrades to deterministic verification instead of blocking export.
+
 ## Phase Ordering Rationale
 
 - Phase 1 must come first because import correctness, normalization, and validation are prerequisites for everything else.
 - Phase 2 comes next because allocation logic and persisted runs define the authoritative state used by preview, editing, export, and history.
 - Phase 3 depends on Phase 2 because manual editing must operate on valid saved allocations with invariant checks.
-- Phase 4 is last because outputs and reopening flows only make sense once import, allocation, and editing are stable.
-- Phase 5 follows the shipped v1 workflow so smart intake can layer on top of a stable allocation/review/output contract instead of rebuilding downstream phases at the same time.
+- Phase 4 follows because outputs and reopening flows require stable import, allocation, and editing contracts.
+- Phase 5 then hardens intake with confidence/review flows while preserving the existing downstream contracts.
+- Phase 6 comes last because it hardens edge cases and parity expectations based on customer feedback after core workflows already exist.
 
 ## Coverage Check
 
 | Category | Count |
 |----------|-------|
-| Active requirements total | 46 |
-| Mapped to phases | 46 |
+| Active requirements total | 51 |
+| Mapped to phases | 51 |
 | Unmapped | 0 |
 
 Coverage status: ✓ Complete
@@ -155,6 +174,7 @@ Coverage status: ✓ Complete
 - **Phase 3:** Needs careful planning for drag-and-drop state flow and post-edit invariant enforcement.
 - **Phase 4:** Needs implementation-time validation for workbook formatting parity and print CSS behavior.
 - **Phase 5:** Needs planning around multi-format sniffing, confidence scoring, intake review UX, audit persistence, and AI fallback boundaries.
+- **Phase 6:** Needs strict traceability between template parity contract artifacts, room-only export policy, and deterministic verification gate behavior.
 
 ### Phase 5: Smart Intake Core
 
@@ -169,5 +189,18 @@ Plans:
 - [ ] 05-03 — Review workspace and allocation gating
 - [ ] 05-04 — AI assistance, fallback hardening, and regression coverage
 
+### Phase 6: Customer feedback hardening: flexible import sheet detection, strict room class fairness, template-locked export parity, and AI verification gate
+
+**Goal:** Deliver customer-requested hardening on top of the existing flow by making import sheet selection deterministic, fairness strict and feasibility-aware, export template-locked with explicit room-only mode fallback, and verification deterministic-first with AI advisories.
+**Requirements**: CF-IMPORT-01, CF-FAIRNESS-01, CF-EXPORT-01, CF-EXPORT-02, CF-AI-GATE-01
+**Depends on:** Phase 5
+**Plans:** 4 plans
+
+Plans:
+- [ ] 06-01 — Flexible workbook sheet detection and import diagnostics
+- [x] 06-02 — Strict class fairness feasibility, fallback, and diagnostics
+- [ ] 06-03 — Template source-of-truth parity contract and room-only policy
+- [ ] 06-04 — Deterministic export verification gate with AI advisories
+
 ---
-*Last updated: 2026-04-08 after Phase 5 planning*
+*Last updated: 2026-04-10 after Phase 6 revision hardening*

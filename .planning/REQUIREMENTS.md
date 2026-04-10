@@ -84,6 +84,16 @@
 - [x] **SAFE-04**: Sensitive fields such as `MSHV` and `Lớp` are never silently auto-corrected
 - [ ] **SAFE-05**: When the AI provider is unavailable or quota-limited, user can continue with rule-based intake plus review instead of being blocked
 
+## v1.2 Requirements (Phase 6 hardening)
+
+### Customer Feedback Hardening
+
+- [ ] **CF-IMPORT-01**: For `.xlsx`/`.xls` workbooks, system deterministically selects the best roster worksheet (not implicitly sheet index 0), skips blank/title-only sheets, and returns sheet-selection diagnostics (`selectedSheetName`, scanned count, candidate reasoning) in import metadata.
+- [x] **CF-FAIRNESS-01**: In strict fairness mode for representative allocation, each class has per-room spread `<= 1` when feasible under room capacities; when infeasible, system must return deterministic fallback allocation plus machine-readable feasibility and violation details.
+- [ ] **CF-EXPORT-01**: Export generation must use a versioned template parity contract as source-of-truth for workbook structure, column mapping (including split `HỌ LÓT`/`TÊN`), merged ranges, and print setup; outputs must be projected only from authoritative saved-run records.
+- [ ] **CF-EXPORT-02**: Room-only export behavior must be explicit: use room-only template when configured; otherwise apply full-template-single-room fallback mode and expose chosen mode/contract version in export metadata.
+- [ ] **CF-AI-GATE-01**: Pre-export verification is deterministic-first and policy-gated; AI can add structured advisories but cannot override deterministic blockers, and AI failure must fall back to deterministic verification without blocking export when deterministic checks pass.
+
 ## v2 Requirements
 
 ### Custom Templates
@@ -175,13 +185,20 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUDT-01 | Phase 5 | Complete |
 | SAFE-04 | Phase 5 | Complete |
 | SAFE-05 | Phase 5 | Pending |
+| CF-IMPORT-01 | Phase 6 | Planned |
+| CF-FAIRNESS-01 | Phase 6 | Planned |
+| CF-EXPORT-01 | Phase 6 | Planned |
+| CF-EXPORT-02 | Phase 6 | Planned |
+| CF-AI-GATE-01 | Phase 6 | Planned |
 
 **Coverage:**
 - v1 requirements: 36 total
 - v1.1 requirements: 10 total
-- Mapped to phases: 46
+- v1.2 requirements: 5 total
+- Active requirements total: 51
+- Mapped to phases: 51
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-08*
-*Last updated: 2026-04-08 after Phase 5 definition*
+*Last updated: 2026-04-10 after Phase 6 traceability revision*
