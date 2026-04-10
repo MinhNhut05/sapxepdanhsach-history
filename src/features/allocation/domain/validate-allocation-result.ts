@@ -151,7 +151,7 @@ export function validateAllocationResult({
     fairnessFeasibility,
   );
 
-  if (classSpreadViolations.length > 0) {
+  if (classSpreadViolations.length > 0 && fairnessFeasibility?.feasible) {
     errors.push(
       ...classSpreadViolations.map(
         (violation) => `${violation.className} spread is greater than 1`,

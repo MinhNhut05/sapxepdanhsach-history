@@ -161,7 +161,7 @@ function distributeClassTargets(
     const className = classNames[classIndex]!;
     const total = classTotals.get(className) ?? 0;
     const base = Math.floor(total / roomCount);
-    let extras = total % roomCount;
+    const extras = total % roomCount;
 
     for (let roomIndex = 0; roomIndex < roomCount; roomIndex += 1) {
       if (remainingCapacity[roomIndex]! < base) {
@@ -172,8 +172,8 @@ function distributeClassTargets(
       remainingCapacity[roomIndex]! -= base;
     }
 
-    while (extras > 0) {
-      const candidates = remainingCapacity
+    if (extras > 0) {
+      const extraCandidates = remainingCapacity
         .map((capacity, roomIndex) => ({ capacity, roomIndex }))
         .filter((room) => room.capacity > 0)
         .sort((left, right) => {
@@ -184,15 +184,15 @@ function distributeClassTargets(
           return left.roomIndex - right.roomIndex;
         });
 
-      const candidateRoomIndex = candidates[0]?.roomIndex;
-
-      if (candidateRoomIndex === undefined) {
+      if (extraCandidates.length < extras) {
         return null;
       }
 
-      targets[candidateRoomIndex]![classIndex] += 1;
-      remainingCapacity[candidateRoomIndex]! -= 1;
-      extras -= 1;
+      for (let extraIndex = 0; extraIndex < extras; extraIndex += 1) {
+        const candidateRoomIndex = extraCandidates[extraIndex]!.roomIndex;
+        targets[candidateRoomIndex]![classIndex] += 1;
+        remainingCapacity[candidateRoomIndex]! -= 1;
+      }
     }
   }
 

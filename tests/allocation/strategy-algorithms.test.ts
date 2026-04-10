@@ -84,7 +84,8 @@ describe("allocation strategies", () => {
   });
 
   it("uses proportional quotas for representative_ratio", () => {
-    const rooms = assignRepresentativeRatio(createRoster(), buildRoomCapacities(6, 3));
+    const allocation = assignRepresentativeRatio(createRoster(), buildRoomCapacities(6, 3));
+    const rooms = allocation.rooms;
 
     expect(rooms.map((room) => room.students.map((student) => student.canonical.className))).toEqual([
       ["A1", "A2"],

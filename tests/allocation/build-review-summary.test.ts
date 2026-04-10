@@ -172,4 +172,81 @@ describe("buildReviewSummary", () => {
     ]);
     expect(summary.classSpreadViolations).toEqual([]);
   });
+
+  it("keeps machine-readable fallback warnings for infeasible fairness", () => {
+    const rooms = generateCandidateNumbers(
+      [
+        {
+          roomNumber: 1,
+          capacity: 3,
+          students: [createStudent(0, "A1"), createStudent(1, "A1"), createStudent(2, "A1")],
+        },
+        {
+          roomNumber: 2,
+          capacity: 2,
+          students: [createStudent(3, "A1"), createStudent(4, "A1")],
+        },
+        {
+          roomNumber: 3,
+          capacity: 2,
+          students: [createStudent(5, "B1"), createStudent(6, "B1")],
+        },
+      ],
+      {
+        preserveStudentOrder: true,
+      },
+    );
+
+    const summary = buildReviewSummary({
+      rooms,
+      fairnessFeasibility: {
+        strategy: "representative_ratio",
+        strictClassSpreadTarget: 1,
+        feasible: false,
+        fallbackApplied: true,
+        reasonCode: "strict_fairness_infeasible",
+        reason: "Fallback deterministic do strict fairness infeasible.",
+      },
+      validation: {
+        fairnessFeasibility: {
+          strategy: "representative_ratio",
+          strictClassSpreadTarget: 1,
+          feasible: false,
+          fallbackApplied: true,
+          reasonCode: "strict_fairness_infeasible",
+          reason: "Fallback deterministic do strict fairness infeasible.",
+        },
+        classSpreadByClass: [
+          {
+            className: "A1",
+            totalStudents: 5,
+            expectedMinPerRoom: 1,
+            expectedMaxPerRoom: 2,
+            minCount: 0,
+            maxCount: 3,
+            spread: 3,
+            rooms: [
+              { roomNumber: 1, count: 3 },
+              { roomNumber: 2, count: 2 },
+              { roomNumber: 3, count: 0 },
+            ],
+          },
+        ],
+        classSpreadViolations: [],
+      },
+    });
+
+    expect(summary.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "strict_fairness_infeasible",
+          message: "Fallback deterministic do strict fairness infeasible.",
+        }),
+      ]),
+    );
+    expect(summary.fairnessFeasibility).toMatchObject({
+      feasible: false,
+      fallbackApplied: true,
+    });
+  });
 });
