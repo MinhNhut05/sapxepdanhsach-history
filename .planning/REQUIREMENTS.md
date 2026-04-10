@@ -88,7 +88,7 @@
 
 ### Customer Feedback Hardening
 
-- [ ] **CF-IMPORT-01**: For `.xlsx`/`.xls` workbooks, system deterministically selects the best roster worksheet (not implicitly sheet index 0), skips blank/title-only sheets, and returns sheet-selection diagnostics (`selectedSheetName`, scanned count, candidate reasoning) in import metadata.
+- [x] **CF-IMPORT-01**: For `.xlsx`/`.xls` workbooks, system deterministically selects the best roster worksheet (not implicitly sheet index 0), skips blank/title-only sheets, and returns sheet-selection diagnostics (`selectedSheetName`, scanned count, candidate reasoning) in import metadata.
 - [x] **CF-FAIRNESS-01**: In strict fairness mode for representative allocation, each class has per-room spread `<= 1` when feasible under room capacities; when infeasible, system must return deterministic fallback allocation plus machine-readable feasibility and violation details.
 - [ ] **CF-EXPORT-01**: Export generation must use a versioned template parity contract as source-of-truth for workbook structure, column mapping (including split `HỌ LÓT`/`TÊN`), merged ranges, and print setup; outputs must be projected only from authoritative saved-run records.
 - [ ] **CF-EXPORT-02**: Room-only export behavior must be explicit: use room-only template when configured; otherwise apply full-template-single-room fallback mode and expose chosen mode/contract version in export metadata.
@@ -185,7 +185,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUDT-01 | Phase 5 | Complete |
 | SAFE-04 | Phase 5 | Complete |
 | SAFE-05 | Phase 5 | Pending |
-| CF-IMPORT-01 | Phase 6 | Planned |
+| CF-IMPORT-01 | Phase 6 | Complete |
 | CF-FAIRNESS-01 | Phase 6 | Planned |
 | CF-EXPORT-01 | Phase 6 | Planned |
 | CF-EXPORT-02 | Phase 6 | Planned |

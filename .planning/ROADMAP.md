@@ -197,7 +197,7 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 06-01 — Flexible workbook sheet detection and import diagnostics
+- [x] 06-01 — Flexible workbook sheet detection and import diagnostics
 - [x] 06-02 — Strict class fairness feasibility, fallback, and diagnostics
 - [ ] 06-03 — Template source-of-truth parity contract and room-only policy
 - [ ] 06-04 — Deterministic export verification gate with AI advisories

@@ -4,12 +4,12 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 06
 status: unknown
-last_updated: "2026-04-10T16:18:27.025Z"
+last_updated: "2026-04-10T16:25:02Z"
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 24
-  completed_plans: 21
+  completed_plans: 22
 ---
 
 # State
@@ -34,7 +34,7 @@ See: .planning/PROJECT.md (updated 2026-04-08)
 | 3 | Review & Manual Editing | ✓ | 4/4 | 100% |
 | 4 | Output & Operations | ✓ | 4/4 | 100% |
 | 5 | Smart Intake Core | ✓ | 4/4 | 100% |
-| 6 | Customer Feedback Hardening | ◆ | 1/4 | 25% |
+| 6 | Customer Feedback Hardening | ◆ | 2/4 | 50% |
 
 ## Notes
 
@@ -45,8 +45,8 @@ See: .planning/PROJECT.md (updated 2026-04-08)
 - Phase 3 execution complete — authoritative review dashboard, manual editing, save rehydration, and verification artifacts are in place.
 - Phase 4 execution complete — retention-aware history reopening, workbook export, room print flows, and homepage output operations are verified.
 - Phase 5 execution complete — smart intake foundations, review routing, UI gating, and AI fallback hardening are in place.
-- Phase 6 execution started — 06-02 completed strict representative fairness feasibility, deterministic fallback signaling, and review diagnostics.
-- Next step: execute the remaining Phase 6 plans (06-01, 06-03, 06-04).
+- Phase 6 execution started — 06-01 completed deterministic workbook sheet selection plus import diagnostics, and 06-02 completed strict representative fairness feasibility, deterministic fallback signaling, and review diagnostics.
+- Next step: execute the remaining Phase 6 plans (06-03, 06-04).
 
 ## Accumulated Context
 
@@ -54,8 +54,9 @@ See: .planning/PROJECT.md (updated 2026-04-08)
 
 - Phase 5 added: Smart Intake Core
 - Phase 6 added: Customer Feedback Hardening
+- Workbook intake now scores candidate worksheets and returns selected-sheet diagnostics instead of assuming the first sheet is the roster.
 - Representative allocation now computes strict fairness feasibility before assignment and falls back deterministically with explicit reason metadata when strict spread cannot be satisfied.
 - Per-class spread diagnostics are emitted by validation/review summary instead of being recomputed in the UI.
 
 ---
-*Last updated: 2026-04-08 after Phase 5 planning*
+*Last updated: 2026-04-10 after Phase 6 plan 06-01 finalization*
