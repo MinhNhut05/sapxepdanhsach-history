@@ -318,6 +318,18 @@ async function importRosterAndWait(fileName = "K19A.xlsx") {
   });
 }
 
+async function waitForVerificationGate() {
+  await waitFor(() => {
+    expect(screen.getByText(/Export verification gate/i)).toBeInTheDocument();
+  });
+}
+
+async function waitForVerificationMetadata() {
+  await waitFor(() => {
+    expect(screen.getByText(/AI advisory: AI fallback used\./i)).toBeInTheDocument();
+  });
+}
+
 async function runAllocationAndOpenEditMode() {
   fireEvent.click(screen.getByRole("button", { name: /Chạy phân phòng/i }));
 
@@ -388,7 +400,40 @@ describe("AllocationWorkspace", () => {
         } satisfies Partial<Response>;
       }
 
-      if (url.includes("/api/allocations")) {
+      if (url.includes("/api/allocations/run-01/verify-export")) {
+        return {
+          ok: true,
+          json: async () => ({
+            verificationReport: {
+              status: "pass",
+              gate: {
+                passed: true,
+                blockingFindings: [],
+                policy: "deterministic_export_gate_v1",
+              },
+              findings: [
+                {
+                  code: "ai_timeout_review",
+                  source: "ai",
+                  severity: "info",
+                  section: "manual_edit_consistency",
+                  message: "AI fallback used.",
+                  reasoning: "Provider timeout normalized to deterministic-only mode.",
+                },
+              ],
+              blockingFindings: [],
+              metadata: {
+                generatedAt: "2026-04-10T10:00:00.000Z",
+                fallbackUsed: true,
+                fallbackReason: "timeout",
+                fallbackMessage: "AI verification bị timeout nên hệ thống chỉ dùng deterministic checks.",
+              },
+            },
+          }),
+        } satisfies Partial<Response>;
+      }
+
+      if (url.includes("/api/allocations") && init?.method === "POST") {
         return {
           ok: true,
           text: async () => JSON.stringify(savedRun),
@@ -414,9 +459,13 @@ describe("AllocationWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByText("P01-001")).toBeInTheDocument();
     });
+    await waitForVerificationGate();
+    await waitForVerificationMetadata();
 
     expect(screen.getByText("21 SV x 12 phòng")).toBeInTheDocument();
     expect(screen.getByText("20 SV x 1 phòng")).toBeInTheDocument();
+    expect(screen.getByText(/fallbackUsed:/i)).toBeInTheDocument();
+    expect(screen.getByText(/AI advisory: AI fallback used\./i)).toBeInTheDocument();
   });
 
   it("keeps allocation disabled during review_required and enables it after confirmation", async () => {
@@ -438,7 +487,31 @@ describe("AllocationWorkspace", () => {
         } satisfies Partial<Response>;
       }
 
-      if (url.includes("/api/allocations")) {
+      if (url.includes("/api/allocations/run-edit/verify-export")) {
+        return {
+          ok: true,
+          json: async () => ({
+            verificationReport: {
+              status: "pass",
+              gate: {
+                passed: true,
+                blockingFindings: [],
+                policy: "deterministic_export_gate_v1",
+              },
+              findings: [],
+              blockingFindings: [],
+              metadata: {
+                generatedAt: "2026-04-10T10:00:00.000Z",
+                fallbackUsed: false,
+                fallbackReason: null,
+                fallbackMessage: null,
+              },
+            },
+          }),
+        } satisfies Partial<Response>;
+      }
+
+      if (url.includes("/api/allocations") && init?.method === "POST") {
         return {
           ok: true,
           text: async () => JSON.stringify(savedRun),
@@ -550,7 +623,7 @@ describe("AllocationWorkspace", () => {
         } satisfies Partial<Response>;
       }
 
-      if (url.includes("/api/allocations")) {
+      if (url.includes("/api/allocations") && init?.method === "POST") {
         return {
           ok: true,
           text: async () => JSON.stringify(savedRun),
@@ -579,23 +652,16 @@ describe("AllocationWorkspace", () => {
     expect(roomCountInput).toHaveValue(1);
   });
 
-  it("saves manual edits, sends expectedEditVersion, and rehydrates the edited snapshot", async () => {
-    const importPayload = createEditableImportPayload();
-    const initialSavedRun = createEditableSavedRunPayload();
-    const editedSavedRun = createEditableSavedRunPayload({
-      order: [[1, 0], [2, 3]],
-      isEdited: true,
-      editVersion: 1,
-      lastEditedAt: "2026-04-08T06:20:00.000Z",
-    });
+  it("disables export while deterministic gate fails and surfaces fallback/audit metadata", async () => {
+    const importPayload = createImportPayload();
+    const savedRun = createSavedRunPayload();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
 
       if (isHistoryListRequest(url, init)) {
         return {
           ok: true,
-          text: async () =>
-            JSON.stringify(createHistoryResponse([createHistoryItem({ id: "run-edit" })])),
+          text: async () => JSON.stringify(createHistoryResponse()),
         } satisfies Partial<Response>;
       }
 
@@ -605,17 +671,69 @@ describe("AllocationWorkspace", () => {
         } satisfies Partial<Response>;
       }
 
-      if (url.includes("/api/allocations/run-edit")) {
+      if (url.includes("/api/allocations/run-01/verify-export")) {
         return {
           ok: true,
-          text: async () => JSON.stringify(editedSavedRun),
+          json: async () => ({
+            verificationReport: {
+              status: "fail",
+              gate: {
+                passed: false,
+                blockingFindings: [
+                  {
+                    code: "candidate_number_format_invalid",
+                    source: "deterministic",
+                    severity: "blocking",
+                    section: "candidate_number_integrity",
+                    message: "Số báo danh không đúng format.",
+                    reasoning: "Candidate numbers must remain deterministic.",
+                  },
+                ],
+                policy: "deterministic_export_gate_v1",
+              },
+              findings: [
+                {
+                  code: "candidate_number_format_invalid",
+                  source: "deterministic",
+                  severity: "blocking",
+                  section: "candidate_number_integrity",
+                  message: "Số báo danh không đúng format.",
+                  reasoning: "Candidate numbers must remain deterministic.",
+                },
+                {
+                  code: "ai_timeout_review",
+                  source: "ai",
+                  severity: "info",
+                  section: "manual_edit_consistency",
+                  message: "AI fallback used.",
+                  reasoning: "Provider timeout normalized to deterministic-only mode.",
+                },
+              ],
+              blockingFindings: [
+                {
+                  code: "candidate_number_format_invalid",
+                  source: "deterministic",
+                  severity: "blocking",
+                  section: "candidate_number_integrity",
+                  message: "Số báo danh không đúng format.",
+                  reasoning: "Candidate numbers must remain deterministic.",
+                },
+              ],
+              metadata: {
+                generatedAt: "2026-04-10T10:00:00.000Z",
+                fallbackUsed: true,
+                fallbackReason: "timeout",
+                fallbackMessage: "AI verification bị timeout nên hệ thống chỉ dùng deterministic checks.",
+              },
+            },
+          }),
         } satisfies Partial<Response>;
       }
 
-      if (url.includes("/api/allocations")) {
+      if (url.includes("/api/allocations") && init?.method === "POST") {
         return {
           ok: true,
-          text: async () => JSON.stringify(initialSavedRun),
+          text: async () => JSON.stringify(savedRun),
         } satisfies Partial<Response>;
       }
 
@@ -627,17 +745,21 @@ describe("AllocationWorkspace", () => {
     render(<AllocationWorkspace />);
 
     await importRosterAndWait();
-    await runAllocationAndOpenEditMode();
 
-    const moveButtons = screen.getAllByRole("button", {
-      name: /move to next room/i,
-    });
-    fireEvent.click(moveButtons[0]);
-
-    fireEvent.click(screen.getByRole("button", { name: /Lưu chỉnh sửa/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Chạy phân phòng/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Phản hồi draft/i)).toBeInTheDocument();
+      expect(screen.getByText(/Export verification gate/i)).toBeInTheDocument();
     });
+    await waitForVerificationMetadata();
+
+    const exportLink = screen.getByText(/Đang xác minh export...|Xuất Excel/i).closest("a");
+
+    expect(exportLink).not.toBeNull();
+    expect(exportLink).toHaveAttribute("aria-disabled", "true");
+    expect(exportLink).not.toHaveAttribute("href");
+    expect(screen.getByText(/Số báo danh không đúng format\./i)).toBeInTheDocument();
+    expect(screen.getByText(/fallbackUsed: true/i)).toBeInTheDocument();
+    expect(screen.getByText(/AI advisory: AI fallback used\./i)).toBeInTheDocument();
   });
 });

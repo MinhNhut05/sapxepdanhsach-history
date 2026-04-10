@@ -3,6 +3,7 @@ import {
   loadAllocationRun,
 } from "@/features/allocation/server/load-allocation-run";
 import { exportAllocationWorkbook } from "@/features/allocation/server/export-allocation-workbook";
+import { buildExportVerificationReport } from "@/features/allocation/server/export-verification";
 
 function errorBody(error: AllocationRunRouteError) {
   return {
@@ -22,6 +23,24 @@ export async function GET(
 
   try {
     const savedRun = await loadAllocationRun(id);
+    const verificationReport = await buildExportVerificationReport(savedRun);
+
+    if (!verificationReport.gate.passed) {
+      return Response.json(
+        errorBody(
+          new AllocationRunRouteError(
+            "Export bị chặn vì deterministic verification chưa đạt.",
+            422,
+            "allocation_export_blocked",
+            {
+              verificationReport,
+            },
+          ),
+        ),
+        { status: 422 },
+      );
+    }
+
     const workbookBytes = await exportAllocationWorkbook(savedRun);
     const responseBody = Buffer.from(workbookBytes);
 

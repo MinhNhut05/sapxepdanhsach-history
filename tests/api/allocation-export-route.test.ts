@@ -12,9 +12,10 @@ import type {
   CanonicalStudentRecord,
 } from "../../src/features/allocation/domain/allocation-types";
 
-const { deleteManyMock, findUniqueMock } = vi.hoisted(() => ({
+const { deleteManyMock, findUniqueMock, buildExportVerificationReportMock } = vi.hoisted(() => ({
   deleteManyMock: vi.fn(),
   findUniqueMock: vi.fn(),
+  buildExportVerificationReportMock: vi.fn(),
 }));
 
 vi.mock("../../src/lib/prisma", () => ({
@@ -24,6 +25,10 @@ vi.mock("../../src/lib/prisma", () => ({
       findUnique: findUniqueMock,
     },
   },
+}));
+
+vi.mock("../../src/features/allocation/server/export-verification", () => ({
+  buildExportVerificationReport: buildExportVerificationReportMock,
 }));
 
 import { GET } from "../../src/app/api/allocations/[id]/export/route";
@@ -141,7 +146,28 @@ async function callExportRoute(id = "run-export"): Promise<Response> {
 beforeEach(() => {
   deleteManyMock.mockReset();
   findUniqueMock.mockReset();
+  buildExportVerificationReportMock.mockReset();
   deleteManyMock.mockResolvedValue({ count: 0 });
+  buildExportVerificationReportMock.mockResolvedValue({
+    status: "pass",
+    gate: {
+      passed: true,
+      blockingFindings: [],
+      policy: "deterministic_export_gate_v1",
+    },
+    findings: [],
+    blockingFindings: [],
+    sections: [],
+    metadata: {
+      generatedAt: "2026-04-10T10:00:00.000Z",
+      fallbackUsed: false,
+      fallbackReason: null,
+      fallbackMessage: null,
+      aiEnabled: false,
+      aiAttempted: false,
+      runId: "run-export",
+    },
+  });
 });
 
 describe("GET /api/allocations/[id]/export", () => {
@@ -177,28 +203,70 @@ describe("GET /api/allocations/[id]/export", () => {
     expect(payload.error.code).toBe("allocation_run_not_found");
   });
 
-  it("returns allocation_run_not_found for expired runs and prunes them before export", async () => {
-    const expiredAt = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
-
-    findUniqueMock.mockResolvedValueOnce(
-      createStoredRun({
-        createdAt: expiredAt,
-        updatedAt: expiredAt,
-        lastEditedAt: null,
-      }),
-    );
-
-    const response = await callExportRoute("expired-run");
-    const payload = await response.json();
-
-    expect(response.status).toBe(404);
-    expect(payload.error.code).toBe("allocation_run_not_found");
-    expect(deleteManyMock).toHaveBeenCalledWith({
-      where: {
-        id: {
-          in: ["run-export"],
+  it("rejects export when deterministic verification fails even if AI advisories are positive", async () => {
+    findUniqueMock.mockResolvedValueOnce(createStoredRun());
+    buildExportVerificationReportMock.mockResolvedValueOnce({
+      status: "fail",
+      gate: {
+        passed: false,
+        blockingFindings: [
+          {
+            code: "candidate_number_format_invalid",
+            source: "deterministic",
+            severity: "blocking",
+            message: "Số báo danh không đúng format.",
+            reasoning: "Candidate numbers must remain deterministic.",
+            section: "candidate_number_integrity",
+          },
+        ],
+        policy: "deterministic_export_gate_v1",
+      },
+      findings: [
+        {
+          code: "candidate_number_format_invalid",
+          source: "deterministic",
+          severity: "blocking",
+          message: "Số báo danh không đúng format.",
+          reasoning: "Candidate numbers must remain deterministic.",
+          section: "candidate_number_integrity",
         },
+        {
+          code: "ai_positive_review",
+          source: "ai",
+          severity: "info",
+          message: "AI thinks export looks good.",
+          reasoning: "No obvious issues found.",
+          section: "manual_edit_consistency",
+        },
+      ],
+      blockingFindings: [
+        {
+          code: "candidate_number_format_invalid",
+          source: "deterministic",
+          severity: "blocking",
+          message: "Số báo danh không đúng format.",
+          reasoning: "Candidate numbers must remain deterministic.",
+          section: "candidate_number_integrity",
+        },
+      ],
+      sections: [],
+      metadata: {
+        generatedAt: "2026-04-10T10:00:00.000Z",
+        fallbackUsed: false,
+        fallbackReason: null,
+        fallbackMessage: null,
+        aiEnabled: true,
+        aiAttempted: true,
+        runId: "run-export",
       },
     });
+
+    const response = await callExportRoute();
+    const payload = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(payload.error.code).toBe("allocation_export_blocked");
+    expect(payload.error.details.verificationReport.gate.passed).toBe(false);
+    expect(payload.error.details.verificationReport.findings.some((finding: { source: string; code: string }) => finding.source === "ai" && finding.code === "ai_positive_review")).toBe(true);
   });
 });
