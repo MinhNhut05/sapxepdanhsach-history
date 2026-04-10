@@ -201,4 +201,41 @@ describe("readIntakeFile", () => {
       ]),
     );
   });
+
+  it("breaks perfect ties by lower worksheet index for stable repeated runs", async () => {
+    const workbook = await buildXlsxBuffer([
+      {
+        name: "Sheet A",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+        ],
+      },
+      {
+        name: "Sheet B",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19B", "MS002", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
+        ],
+      },
+    ]);
+
+    const firstRun = await readIntakeFile(workbook, {
+      fileName: "roster.xlsx",
+    });
+    const secondRun = await readIntakeFile(workbook, {
+      fileName: "roster.xlsx",
+    });
+
+    expect(firstRun.sheetName).toBe("Sheet A");
+    expect(secondRun.sheetName).toBe("Sheet A");
+    expect(firstRun.sheetSelectionDiagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheetName: "Sheet B",
+          selectionReason: "lost_worksheet_index_tiebreak",
+        }),
+      ]),
+    );
+  });
 });
