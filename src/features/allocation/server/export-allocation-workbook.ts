@@ -270,7 +270,6 @@ export async function exportAllocationWorkbook(
   workbook.subject = "Phan phong thi";
   workbook.title = "Danh sach phan phong thi";
   workbook.keywords = `${TEMPLATE_VERSION};${exportMode}`;
-  workbook.comments = `templateVersion=${TEMPLATE_VERSION};exportMode=${exportMode}`;
 
   if (typeof options?.roomNumber !== "number") {
     applyTemplateContract(workbook, {

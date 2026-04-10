@@ -140,6 +140,9 @@ describe("exportAllocationWorkbook", () => {
     expect(masterSheet!.pageSetup.orientation).toBe("landscape");
     expect(masterSheet!.pageSetup.fitToWidth).toBe(1);
     expect(masterSheet!.pageSetup.fitToHeight).toBe(0);
+    expect(masterSheet!.pageSetup.margins).toEqual(
+      expect.objectContaining({ left: 0.35, right: 0.35, top: 0.45, bottom: 0.45 }),
+    );
     expect(masterSheet!.getCell("A1").isMerged).toBe(true);
     expect(masterSheet!.getCell("A2").isMerged).toBe(true);
     expect(masterSheet!.getRow(6).getCell(2).value).toBe(outputRows[0].candidateNumber);
@@ -155,5 +158,24 @@ describe("exportAllocationWorkbook", () => {
     expect(roomSheet!.getRow(7).getCell(2).value).toBe("P01-002");
     expect(roomSheet!.getRow(6).getCell(7).value).toBe("MS002");
     expect(roomSheet!.getRow(7).getCell(7).value).toBe("MS001");
+  });
+
+  it("uses deterministic full-template-single-room fallback when room-only template is unavailable", async () => {
+    const savedRun = createEditableRun();
+    const result = await exportAllocationWorkbook(savedRun, { roomNumber: 1 });
+    const workbook = new Workbook();
+
+    await workbook.xlsx.load(Buffer.from(result.bytes) as unknown as Parameters<Workbook["xlsx"]["load"]>[0]);
+
+    expect(result.templateVersion).toBe(TEMPLATE_VERSION);
+    expect(result.exportMode).toBe("full_template_single_room_fallback");
+    expect(workbook.getWorksheet("Tổng hợp")).toBeUndefined();
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(["Phòng 01"]);
+    expect(workbook.getWorksheet("Phòng 01")!.getCell("H3").value).toBe(
+      "full_template_single_room_fallback",
+    );
+    expect(workbook.getWorksheet("Phòng 01")!.views[0]).toEqual(
+      expect.objectContaining({ state: "frozen", ySplit: SHEET_TEMPLATE_CONTRACT.headerRowNumber }),
+    );
   });
 });
