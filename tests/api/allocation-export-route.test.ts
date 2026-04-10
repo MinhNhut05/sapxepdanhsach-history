@@ -11,6 +11,7 @@ import type {
   AllocationResultSnapshot,
   CanonicalStudentRecord,
 } from "../../src/features/allocation/domain/allocation-types";
+import { TEMPLATE_VERSION } from "../../src/features/allocation/server/export-template-contract";
 
 const { deleteManyMock, findUniqueMock } = vi.hoisted(() => ({
   deleteManyMock: vi.fn(),
@@ -36,8 +37,8 @@ function createStudent(index: number, className = `A${(index % 2) + 1}`): Canoni
     raw: {
       className,
       studentCode: `MS${studentNumber}`,
-      middleName: "Hoc Vien",
-      firstName: studentNumber,
+      middleName: index === 1 ? "Nguyen Van" : "Hoc Vien",
+      firstName: index === 1 ? "An" : studentNumber,
       birthDate: "2001-01-01",
       birthPlace: "Hue",
       note: null,
@@ -45,9 +46,9 @@ function createStudent(index: number, className = `A${(index % 2) + 1}`): Canoni
     canonical: {
       className,
       studentCode: `MS${studentNumber}`,
-      middleName: "Hoc Vien",
-      firstName: studentNumber,
-      fullName: `Hoc Vien ${studentNumber}`,
+      middleName: index === 1 ? "Nguyen Van" : "Hoc Vien",
+      firstName: index === 1 ? "An" : studentNumber,
+      fullName: index === 1 ? "FULL NAME SHOULD NOT DRIVE SPLIT" : `Hoc Vien ${studentNumber}`,
       birthDateIso: "2001-01-01",
       birthPlace: "Hue",
       note: null,
@@ -132,8 +133,10 @@ function createStoredRun(overrides?: {
   };
 }
 
-async function callExportRoute(id = "run-export"): Promise<Response> {
-  return GET(new Request(`http://localhost/api/allocations/${id}/export`), {
+async function callExportRoute(id = "run-export", room?: number): Promise<Response> {
+  const suffix = typeof room === "number" ? `?room=${room}` : "";
+
+  return GET(new Request(`http://localhost/api/allocations/${id}/export${suffix}`), {
     params: Promise.resolve({ id }),
   });
 }
@@ -145,7 +148,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/allocations/[id]/export", () => {
-  it("returns workbook bytes with binary headers and edited Phòng 01 parity", async () => {
+  it("returns workbook bytes with binary headers, metadata headers, and edited Phòng 01 parity", async () => {
     findUniqueMock.mockResolvedValueOnce(createStoredRun());
 
     const response = await callExportRoute();
@@ -160,11 +163,42 @@ describe("GET /api/allocations/[id]/export", () => {
     expect(response.headers.get("content-disposition")).toContain(
       'attachment; filename="phan-phong-run-export.xlsx"',
     );
+    expect(response.headers.get("x-export-template-version")).toBe(TEMPLATE_VERSION);
+    expect(response.headers.get("x-export-mode")).toBe("full_workbook");
     expect(workbook.getWorksheet("Tổng hợp")).toBeDefined();
     expect(workbook.getWorksheet("Phòng 01")).toBeDefined();
-    expect(workbook.getWorksheet("Phòng 01")!.getRow(2).getCell(2).value).toBe("P01-001");
-    expect(workbook.getWorksheet("Phòng 01")!.getRow(2).getCell(5).value).toBe("MS002");
-    expect(workbook.getWorksheet("Phòng 01")!.getRow(3).getCell(5).value).toBe("MS001");
+    expect(workbook.getWorksheet("Phòng 01")!.getCell("A1").value).toBe(
+      "DANH SÁCH PHÒNG 01",
+    );
+    expect(workbook.getWorksheet("Phòng 01")!.getCell("H3").value).toBe("full_workbook");
+    expect(workbook.getWorksheet("Phòng 01")!.getRow(6).getCell(2).value).toBe("P01-001");
+    expect(workbook.getWorksheet("Phòng 01")!.getRow(6).getCell(3).value).toBe("Nguyen Van");
+    expect(workbook.getWorksheet("Phòng 01")!.getRow(6).getCell(4).value).toBe("An");
+    expect(workbook.getWorksheet("Phòng 01")!.getRow(6).getCell(7).value).toBe("MS002");
+    expect(workbook.getWorksheet("Phòng 01")!.getRow(7).getCell(7).value).toBe("MS001");
+  });
+
+  it("returns a room-specific workbook with deterministic fallback mode metadata when room is provided", async () => {
+    findUniqueMock.mockResolvedValueOnce(createStoredRun());
+
+    const response = await callExportRoute("run-export", 1);
+    const workbook = new Workbook();
+
+    await workbook.xlsx.load(await response.arrayBuffer());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toContain(
+      'attachment; filename="phan-phong-run-export-phong-01.xlsx"',
+    );
+    expect(response.headers.get("x-export-template-version")).toBe(TEMPLATE_VERSION);
+    expect(response.headers.get("x-export-mode")).toBe("full_template_single_room_fallback");
+    expect(workbook.getWorksheet("Tổng hợp")).toBeUndefined();
+    expect(workbook.getWorksheet("Phòng 01")).toBeDefined();
+    expect(workbook.getWorksheet("Phòng 02")).toBeUndefined();
+    expect(workbook.getWorksheet("Phòng 01")!.getCell("H3").value).toBe(
+      "full_template_single_room_fallback",
+    );
+    expect(workbook.getWorksheet("Phòng 01")!.getRow(6).getCell(2).value).toBe("P01-001");
   });
 
   it("returns allocation_run_not_found when the requested run does not exist", async () => {
@@ -175,6 +209,16 @@ describe("GET /api/allocations/[id]/export", () => {
 
     expect(response.status).toBe(404);
     expect(payload.error.code).toBe("allocation_run_not_found");
+  });
+
+  it("returns allocation_room_not_found when the requested room does not exist", async () => {
+    findUniqueMock.mockResolvedValueOnce(createStoredRun());
+
+    const response = await callExportRoute("run-export", 9);
+    const payload = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(payload.error.code).toBe("allocation_room_not_found");
   });
 
   it("returns allocation_run_not_found for expired runs and prunes them before export", async () => {
