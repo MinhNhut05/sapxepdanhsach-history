@@ -34,6 +34,9 @@ function errorResult(code: string, message: string): RosterImportResult {
     sourceFormat: "unknown",
     requiresReview: false,
     fallbackUsed: false,
+    selectedSheetName: null,
+    scannedSheetCount: 0,
+    sheetSelectionDiagnostics: [],
     summary: {
       ...emptySummary(),
       blockingIssues: issues.length,

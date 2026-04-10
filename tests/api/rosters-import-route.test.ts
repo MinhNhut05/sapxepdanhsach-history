@@ -7,16 +7,21 @@ import { POST } from "../../src/app/api/rosters/import/route";
 import { MAX_UPLOAD_BYTES } from "../../src/features/roster/server/file-guard";
 
 async function buildWorkbookFile(
-  rows: unknown[][],
+  sheets: Array<{
+    name: string;
+    rows: unknown[][];
+  }>,
   options?: {
     name?: string;
     type?: string;
   },
 ): Promise<File> {
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Roster");
 
-  rows.forEach((row) => worksheet.addRow(row));
+  sheets.forEach(({ name, rows }) => {
+    const worksheet = workbook.addWorksheet(name);
+    rows.forEach((row) => worksheet.addRow(row));
+  });
 
   const fileName = options?.name ?? "roster.xlsx";
   const fileType =
@@ -51,8 +56,13 @@ afterEach(() => {
 describe("POST /api/rosters/import", () => {
   it("returns 200 for a clean .xlsx fast path", async () => {
     const file = await buildWorkbookFile([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+        ],
+      },
     ]);
 
     const response = await callImportRoute(file);
@@ -66,6 +76,8 @@ describe("POST /api/rosters/import", () => {
       sourceFormat: "xlsx",
       sourceFileName: "roster.xlsx",
       fallbackUsed: false,
+      selectedSheetName: "Roster",
+      scannedSheetCount: 1,
       summary: {
         validStudents: 1,
       },
@@ -96,6 +108,8 @@ describe("POST /api/rosters/import", () => {
       sourceFormat: "csv",
       sourceFileName: "roster.csv",
       fallbackUsed: true,
+      selectedSheetName: "Sheet1",
+      scannedSheetCount: 1,
       review: expect.objectContaining({
         unresolvedCount: expect.any(Number),
       }),
@@ -111,8 +125,13 @@ describe("POST /api/rosters/import", () => {
 
   it("keeps sensitive-field MSHV repair review-only instead of auto-applying", async () => {
     const file = await buildWorkbookFile([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["K19A", " MSHV001 ", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", " MSHV001 ", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+        ],
+      },
     ]);
 
     const response = await callImportRoute(file);
@@ -126,6 +145,82 @@ describe("POST /api/rosters/import", () => {
           fieldKey: "studentCode",
           autoApplied: false,
           requiresReview: true,
+        }),
+      ]),
+    );
+  });
+
+  it("returns 200 with sheet diagnostics when the first worksheet is blank", async () => {
+    const file = await buildWorkbookFile([
+      {
+        name: "Giới thiệu",
+        rows: [["Danh sách học viên khóa 19"]],
+      },
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+        ],
+      },
+    ]);
+
+    const response = await callImportRoute(file);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.selectedSheetName).toBe("Roster");
+    expect(payload.scannedSheetCount).toBe(2);
+    expect(payload.sheetSelectionDiagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheetName: "Giới thiệu",
+          selectionReason: "lost_required_header_tiebreak",
+        }),
+        expect.objectContaining({
+          sheetName: "Roster",
+          selectionReason: "selected_best_candidate",
+        }),
+      ]),
+    );
+  });
+
+  it("returns 422 with best-candidate context when no worksheet has all required headers", async () => {
+    const file = await buildWorkbookFile([
+      {
+        name: "Ghi chú",
+        rows: [["Danh sách tạm"]],
+      },
+      {
+        name: "Roster gần đúng",
+        rows: [
+          ["Lớp", "MSHV", "TÊN"],
+          ["K19A", "MS001", "An"],
+        ],
+      },
+    ]);
+
+    const response = await callImportRoute(file);
+    const payload = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(payload.intakeState).toBe("failed");
+    expect(payload.selectedSheetName).toBe("Roster gần đúng");
+    expect(payload.sheetSelectionDiagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheetName: "Roster gần đúng",
+          requiredMatches: 3,
+          selectionReason: "selected_best_available_candidate",
+        }),
+      ]),
+    );
+    expect(payload.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: "blocking",
+          code: "missing_required_header",
+          column: "HỌ LÓT",
         }),
       ]),
     );
@@ -147,8 +242,13 @@ describe("POST /api/rosters/import", () => {
     );
 
     const file = await buildWorkbookFile([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["K19A", " MSHV001 ", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", " MSHV001 ", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+        ],
+      },
     ]);
 
     const response = await callImportRoute(file);
@@ -199,6 +299,8 @@ describe("POST /api/rosters/import", () => {
         }),
       ]),
     );
+    expect(payload.selectedSheetName).toBeNull();
+    expect(payload.scannedSheetCount).toBe(0);
   });
 
   it("returns 413 for oversized uploads", async () => {
@@ -219,13 +321,20 @@ describe("POST /api/rosters/import", () => {
         }),
       ]),
     );
+    expect(payload.selectedSheetName).toBeNull();
+    expect(payload.scannedSheetCount).toBe(0);
   });
 
   it("returns 422 when blocking validation issues exist and includes row-level data", async () => {
     const file = await buildWorkbookFile([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
-      ["K19B", "MS001", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+          ["K19B", "MS001", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
+        ],
+      },
     ]);
 
     const response = await callImportRoute(file);

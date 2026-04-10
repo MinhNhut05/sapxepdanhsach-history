@@ -3,11 +3,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { importRosterWorkbook } from "../../src/features/roster/server/import-roster";
 
-async function buildWorkbookBuffer(rows: unknown[][]): Promise<Buffer> {
+async function buildWorkbookBuffer(
+  sheets: Array<{
+    name: string;
+    rows: unknown[][];
+  }>,
+): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Roster");
 
-  rows.forEach((row) => worksheet.addRow(row));
+  sheets.forEach(({ name, rows }) => {
+    const worksheet = workbook.addWorksheet(name);
+    rows.forEach((row) => worksheet.addRow(row));
+  });
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
@@ -20,21 +27,31 @@ afterEach(() => {
 describe("importRosterWorkbook", () => {
   it("imports valid workbooks with and without GHI CHÚ", async () => {
     const withoutNoteBuffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
-      ["K19A", "MS002", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+          ["K19A", "MS002", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
+        ],
+      },
     ]);
     const withNoteBuffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH", "GHI CHÚ"],
-      [
-        "K19B",
-        "MS010",
-        "Lê Minh",
-        "Châu",
-        "2024-03-15",
-        "Quảng Trị",
-        "  Có mặt  ",
-      ],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH", "GHI CHÚ"],
+          [
+            "K19B",
+            "MS010",
+            "Lê Minh",
+            "Châu",
+            "2024-03-15",
+            "Quảng Trị",
+            "  Có mặt  ",
+          ],
+        ],
+      },
     ]);
 
     const withoutNoteResult = await importRosterWorkbook(withoutNoteBuffer, {
@@ -47,6 +64,8 @@ describe("importRosterWorkbook", () => {
     expect(withoutNoteResult).toMatchObject({
       ok: true,
       intakeState: "ready",
+      selectedSheetName: "Roster",
+      scannedSheetCount: 1,
       summary: {
         validStudents: 2,
       },
@@ -55,6 +74,8 @@ describe("importRosterWorkbook", () => {
     expect(withNoteResult).toMatchObject({
       ok: true,
       intakeState: "ready",
+      selectedSheetName: "Roster",
+      scannedSheetCount: 1,
       summary: {
         validStudents: 1,
       },
@@ -88,6 +109,16 @@ describe("importRosterWorkbook", () => {
     expect(result.requiresReview).toBe(true);
     expect(result.sourceFormat).toBe("csv");
     expect(result.fallbackUsed).toBe(true);
+    expect(result.selectedSheetName).toBe("Sheet1");
+    expect(result.scannedSheetCount).toBe(1);
+    expect(result.sheetSelectionDiagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheetName: "Sheet1",
+          selectionReason: "single_sheet_source",
+        }),
+      ]),
+    );
     expect(result.review?.auditTrail).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -100,8 +131,13 @@ describe("importRosterWorkbook", () => {
 
   it("keeps sensitive MSHV and className repairs review-required even with a preferred proposal", async () => {
     const buffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      [" K19A ", " MS001 ", "Nguyễn Văn", "An", "03.10.1985", "Huế"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          [" K19A ", " MS001 ", "Nguyễn Văn", "An", "03.10.1985", "Huế"],
+        ],
+      },
     ]);
 
     const result = await importRosterWorkbook(buffer, {
@@ -161,8 +197,13 @@ describe("importRosterWorkbook", () => {
     );
 
     const buffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH", "GHI CHÚ"],
-      [" K19A ", " MS001 ", "Nguyễn Văn", "An", "2024-01-13", "Huế", "ưu tiên cửa sổ"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH", "GHI CHÚ"],
+          [" K19A ", " MS001 ", "Nguyễn Văn", "An", "2024-01-13", "Huế", "ưu tiên cửa sổ"],
+        ],
+      },
     ]);
 
     const result = await importRosterWorkbook(buffer, {
@@ -197,8 +238,13 @@ describe("importRosterWorkbook", () => {
     );
 
     const buffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      [" K19A ", " MS001 ", "Nguyễn Văn", "An", "03.10.1985", "Huế"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          [" K19A ", " MS001 ", "Nguyễn Văn", "An", "03.10.1985", "Huế"],
+        ],
+      },
     ]);
 
     const result = await importRosterWorkbook(buffer, {
@@ -218,11 +264,99 @@ describe("importRosterWorkbook", () => {
     );
   });
 
+  it("selects the best candidate sheet and exposes diagnostics for blank-first-sheet workbooks", async () => {
+    const buffer = await buildWorkbookBuffer([
+      {
+        name: "Thông tin",
+        rows: [["Danh sách học viên khóa 19"]],
+      },
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+        ],
+      },
+    ]);
+
+    const result = await importRosterWorkbook(buffer, {
+      fileName: "roster.xlsx",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.selectedSheetName).toBe("Roster");
+    expect(result.scannedSheetCount).toBe(2);
+    expect(result.sheetSelectionDiagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheetName: "Thông tin",
+          selectionReason: "lost_required_header_tiebreak",
+        }),
+        expect.objectContaining({
+          sheetName: "Roster",
+          requiredMatches: 6,
+          dataRowCount: 1,
+          selectionReason: "selected_best_candidate",
+        }),
+      ]),
+    );
+  });
+
+  it("returns best-candidate context when no worksheet satisfies required headers", async () => {
+    const buffer = await buildWorkbookBuffer([
+      {
+        name: "Ghi chú",
+        rows: [["Danh sách tạm"], ["Mã lớp", "Mã học viên", "Tên"]],
+      },
+      {
+        name: "Roster gần đúng",
+        rows: [
+          ["Lớp", "MSHV", "TÊN"],
+          ["K19A", "MS001", "An"],
+        ],
+      },
+    ]);
+
+    const result = await importRosterWorkbook(buffer, {
+      fileName: "roster.xlsx",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.intakeState).toBe("failed");
+    expect(result.selectedSheetName).toBe("Roster gần đúng");
+    expect(result.sheetSelectionDiagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheetName: "Roster gần đúng",
+          requiredMatches: 3,
+          selectionReason: "selected_best_available_candidate",
+        }),
+      ]),
+    );
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "missing_required_header",
+          column: "HỌ LÓT",
+        }),
+        expect.objectContaining({
+          code: "missing_required_header",
+          column: "NGÀY SINH",
+        }),
+      ]),
+    );
+  });
+
   it("blocks duplicate MSHV values", async () => {
     const buffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
-      ["K19A", "MS001", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+          ["K19A", "MS001", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
+        ],
+      },
     ]);
 
     const result = await importRosterWorkbook(buffer, {
@@ -245,9 +379,14 @@ describe("importRosterWorkbook", () => {
 
   it("emits warnings for same name plus birth date with different MSHV", async () => {
     const buffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
-      ["K19B", "MS002", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+          ["K19B", "MS002", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+        ],
+      },
     ]);
 
     const result = await importRosterWorkbook(buffer);
@@ -265,10 +404,15 @@ describe("importRosterWorkbook", () => {
 
   it("warns about blank rows inside the data region", async () => {
     const buffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
-      ["", "", "", "", "", ""],
-      ["K19A", "MS002", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+          ["", "", "", "", "", ""],
+          ["K19A", "MS002", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
+        ],
+      },
     ]);
 
     const result = await importRosterWorkbook(buffer);
@@ -286,9 +430,14 @@ describe("importRosterWorkbook", () => {
 
   it("accepts Vietnamese day-first birth dates and warns when a year is auto-repaired", async () => {
     const buffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["K19A", "MS001", "Nguyễn Văn", "An", "03/10/1985", "Huế"],
-      ["K19A", "MS002", "Trần Thị", "Bình", "02/01/986", "Đà Nẵng"],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["K19A", "MS001", "Nguyễn Văn", "An", "03/10/1985", "Huế"],
+          ["K19A", "MS002", "Trần Thị", "Bình", "02/01/986", "Đà Nẵng"],
+        ],
+      },
     ]);
 
     const result = await importRosterWorkbook(buffer);
@@ -319,8 +468,13 @@ describe("importRosterWorkbook", () => {
 
   it("records info issues when canonical values differ from raw values", async () => {
     const buffer = await buildWorkbookBuffer([
-      ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
-      ["  K19A ", " MS001 ", "  nGUYỄN   văn ", " an ", "2024-01-13", " huế "],
+      {
+        name: "Roster",
+        rows: [
+          ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+          ["  K19A ", " MS001 ", "  nGUYỄN   văn ", " an ", "2024-01-13", " huế "],
+        ],
+      },
     ]);
 
     const result = await importRosterWorkbook(buffer);

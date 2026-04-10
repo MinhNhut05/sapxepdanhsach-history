@@ -32,6 +32,17 @@ export interface ImportResultPayload {
   sourceFormat: IntakeSourceFormat;
   requiresReview: boolean;
   fallbackUsed: boolean;
+  selectedSheetName?: string | null;
+  scannedSheetCount?: number;
+  sheetSelectionDiagnostics?: Array<{
+    sheetName: string;
+    worksheetIndex: number;
+    requiredMatches: number;
+    totalMatches: number;
+    dataRowCount: number;
+    headerRowIndex: number;
+    selectionReason: string;
+  }>;
   review?: IntakeReviewPayload;
   summary: ImportSummaryData;
   students: CanonicalStudentRecord[];

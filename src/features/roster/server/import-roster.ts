@@ -31,12 +31,25 @@ export interface RosterImportSummary {
   infoIssues: number;
 }
 
+export interface SheetSelectionDiagnostic {
+  sheetName: string;
+  worksheetIndex: number;
+  requiredMatches: number;
+  totalMatches: number;
+  dataRowCount: number;
+  headerRowIndex: number;
+  selectionReason: string;
+}
+
 export interface RosterImportResult {
   ok: boolean;
   intakeState: IntakeFlowState;
   sourceFormat: IntakeSourceFormat;
   requiresReview: boolean;
   fallbackUsed: boolean;
+  selectedSheetName: string | null;
+  scannedSheetCount: number;
+  sheetSelectionDiagnostics: SheetSelectionDiagnostic[];
   summary: RosterImportSummary;
   students: CanonicalStudentRecord[];
   stagedStudents: CanonicalStudentRecord[];
@@ -214,6 +227,11 @@ function failureResult(
   worksheetName: string | null,
   totalRowsRead: number,
   issues: ImportIssue[],
+  diagnostics: {
+    selectedSheetName: string | null;
+    scannedSheetCount: number;
+    sheetSelectionDiagnostics: SheetSelectionDiagnostic[];
+  },
 ): RosterImportResult {
   return {
     ok: false,
@@ -221,6 +239,9 @@ function failureResult(
     sourceFormat,
     requiresReview: false,
     fallbackUsed: false,
+    selectedSheetName: diagnostics.selectedSheetName,
+    scannedSheetCount: diagnostics.scannedSheetCount,
+    sheetSelectionDiagnostics: diagnostics.sheetSelectionDiagnostics,
     summary: createSummary(worksheetName, totalRowsRead, issues, []),
     students: [],
     stagedStudents: [],
@@ -249,6 +270,11 @@ export async function importRosterWorkbook(
     fileName: options.fileName ?? "roster.xlsx",
     mimeType: options.mimeType,
   });
+  const sheetSelectionMetadata = {
+    selectedSheetName: intakeFile.selectedSheet.sheetName,
+    scannedSheetCount: intakeFile.scannedSheetCount,
+    sheetSelectionDiagnostics: intakeFile.sheetSelectionDiagnostics,
+  };
 
   if (intakeFile.rowCount === 0) {
     return failureResult(intakeFile.sourceFormat, intakeFile.sheetName, 0, [
@@ -257,7 +283,7 @@ export async function importRosterWorkbook(
         code: "empty_workbook",
         message: "Tệp intake không có dữ liệu để import.",
       },
-    ]);
+    ], sheetSelectionMetadata);
   }
 
   const detectedHeader = detectHeaderRow(intakeFile.rows);
@@ -270,6 +296,7 @@ export async function importRosterWorkbook(
       intakeFile.sheetName,
       Math.max(intakeFile.rowCount - detectedHeader.headerRowIndex - 1, 0),
       headerMapResult.issues,
+      sheetSelectionMetadata,
     );
   }
 
@@ -329,6 +356,7 @@ export async function importRosterWorkbook(
       intakeFile.sheetName,
       dataRows.length,
       issues,
+      sheetSelectionMetadata,
     );
   }
 
@@ -389,6 +417,9 @@ export async function importRosterWorkbook(
     sourceFormat: intakeFile.sourceFormat,
     requiresReview: !ready,
     fallbackUsed,
+    selectedSheetName: intakeFile.selectedSheet.sheetName,
+    scannedSheetCount: intakeFile.scannedSheetCount,
+    sheetSelectionDiagnostics: intakeFile.sheetSelectionDiagnostics,
     review: reviewPayload,
     summary: createSummary(
       intakeFile.sheetName,
