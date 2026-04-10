@@ -5,20 +5,36 @@ import { describe, expect, it } from "vitest";
 import { detectCsvFormat } from "../../src/features/roster/server/detect-csv-format";
 import { readIntakeFile } from "../../src/features/roster/server/read-intake-file";
 
-async function buildXlsxBuffer(rows: unknown[][]): Promise<ArrayBuffer> {
+async function buildXlsxBuffer(
+  sheets: Array<{
+    name: string;
+    rows: unknown[][];
+  }>,
+): Promise<ArrayBuffer> {
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Roster");
 
-  rows.forEach((row) => worksheet.addRow(row));
+  sheets.forEach(({ name, rows }) => {
+    const worksheet = workbook.addWorksheet(name);
+    rows.forEach((row) => worksheet.addRow(row));
+  });
 
   const buffer = await workbook.xlsx.writeBuffer();
   return buffer as ArrayBuffer;
 }
 
-function buildXlsBuffer(rows: unknown[][]): ArrayBuffer {
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
+function buildXlsBuffer(
+  sheets: Array<{
+    name: string;
+    rows: unknown[][];
+  }>,
+): ArrayBuffer {
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, sheet, "Roster");
+
+  sheets.forEach(({ name, rows }) => {
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, sheet, name);
+  });
+
   const binary = XLSX.write(workbook, { bookType: "xls", type: "buffer" });
 
   return binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength);
@@ -33,8 +49,13 @@ describe("readIntakeFile", () => {
   it("extracts rows from .xlsx files", async () => {
     const snapshot = await readIntakeFile(
       await buildXlsxBuffer([
-        ["Lớp", "MSHV", "TÊN"],
-        ["K19A", "MS001", "An"],
+        {
+          name: "Roster",
+          rows: [
+            ["Lớp", "MSHV", "TÊN"],
+            ["K19A", "MS001", "An"],
+          ],
+        },
       ]),
       {
         fileName: "roster.xlsx",
@@ -50,8 +71,13 @@ describe("readIntakeFile", () => {
   it("extracts rows from .xls files", async () => {
     const snapshot = await readIntakeFile(
       buildXlsBuffer([
-        ["Lớp", "MSHV", "TÊN"],
-        ["K19B", "MS002", "Bình"],
+        {
+          name: "Roster",
+          rows: [
+            ["Lớp", "MSHV", "TÊN"],
+            ["K19B", "MS002", "Bình"],
+          ],
+        },
       ]),
       {
         fileName: "roster.xls",
@@ -94,5 +120,85 @@ describe("readIntakeFile", () => {
 
     expect(detected.delimiter).toBe(",");
     expect(detected.encoding).toBe("utf-8");
+  });
+
+  it("selects the second worksheet when the first sheet is empty first sheet noise", async () => {
+    const snapshot = await readIntakeFile(
+      await buildXlsxBuffer([
+        {
+          name: "Giới thiệu",
+          rows: [["Danh sách học viên khóa 19"]],
+        },
+        {
+          name: "Roster",
+          rows: [
+            ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+            ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+          ],
+        },
+      ]),
+      {
+        fileName: "roster.xlsx",
+      },
+    );
+
+    expect(snapshot.sheetName).toBe("Roster");
+    expect(snapshot.selectedSheet.sheetName).toBe("Roster");
+    expect(snapshot.selectedSheet.selectionReason).toBe("selected_best_candidate");
+    expect(snapshot.scannedSheetCount).toBe(2);
+    expect(snapshot.sheetSelectionDiagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheetName: "Giới thiệu",
+          selectionReason: "lost_required_header_tiebreak",
+        }),
+        expect.objectContaining({
+          sheetName: "Roster",
+          requiredMatches: 6,
+          dataRowCount: 1,
+        }),
+      ]),
+    );
+  });
+
+  it("resolves equally valid sheets by lower header row index then lower worksheet index", async () => {
+    const snapshot = await readIntakeFile(
+      await buildXlsxBuffer([
+        {
+          name: "Sheet A",
+          rows: [
+            ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+            ["K19A", "MS001", "Nguyễn Văn", "An", "2024-01-13", "Huế"],
+          ],
+        },
+        {
+          name: "Sheet B",
+          rows: [
+            ["Tiêu đề phụ"],
+            ["Lớp", "MSHV", "HỌ LÓT", "TÊN", "NGÀY SINH", "NƠI SINH"],
+            ["K19B", "MS002", "Trần Thị", "Bình", "2024-02-14", "Đà Nẵng"],
+          ],
+        },
+      ]),
+      {
+        fileName: "roster.xlsx",
+      },
+    );
+
+    expect(snapshot.sheetName).toBe("Sheet A");
+    expect(snapshot.sheetSelectionDiagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sheetName: "Sheet A",
+          selectionReason: "selected_best_candidate",
+          headerRowIndex: 0,
+        }),
+        expect.objectContaining({
+          sheetName: "Sheet B",
+          selectionReason: "lost_header_row_index_tiebreak",
+          headerRowIndex: 1,
+        }),
+      ]),
+    );
   });
 });
