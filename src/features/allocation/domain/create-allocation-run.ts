@@ -8,6 +8,7 @@ import type {
   AllocationRoomDraft,
   AllocationRunInput,
   AllocationStrategyKey,
+  FairnessFeasibility,
 } from "./allocation-types";
 import { buildReviewSummary } from "./build-review-summary";
 import { buildRoomCapacities } from "./build-room-capacities";
@@ -22,16 +23,31 @@ function assignRooms(
   students: AllocationRunInput["students"],
   strategy: AllocationStrategyKey,
   roomCount: number,
-): AllocationRoomDraft[] {
+): {
+  draftRooms: AllocationRoomDraft[];
+  fairnessFeasibility: FairnessFeasibility | null;
+} {
   const roomCapacities = buildRoomCapacities(students.length, roomCount);
 
   switch (strategy) {
     case "even_mix":
-      return assignEvenMix(students, roomCapacities);
+      return {
+        draftRooms: assignEvenMix(students, roomCapacities),
+        fairnessFeasibility: null,
+      };
     case "class_grouped":
-      return assignClassGrouped(students, roomCapacities);
-    case "representative_ratio":
-      return assignRepresentativeRatio(students, roomCapacities);
+      return {
+        draftRooms: assignClassGrouped(students, roomCapacities),
+        fairnessFeasibility: null,
+      };
+    case "representative_ratio": {
+      const result = assignRepresentativeRatio(students, roomCapacities);
+
+      return {
+        draftRooms: result.rooms,
+        fairnessFeasibility: result.fairnessFeasibility,
+      };
+    }
     default:
       return assertNever(strategy);
   }
@@ -44,17 +60,24 @@ export function createAllocationRun({
 }: AllocationRunInput): AllocationResultSnapshot {
   const sortedStudents = sortStudentsByVietnameseName(students);
   const roomCapacities = buildRoomCapacities(sortedStudents.length, roomCount);
-  const draftRooms = assignRooms(sortedStudents, strategy, roomCount);
+  const { draftRooms, fairnessFeasibility } = assignRooms(
+    sortedStudents,
+    strategy,
+    roomCount,
+  );
   const rooms = generateCandidateNumbers(draftRooms);
 
-  validateAllocationResult({
+  const validation = validateAllocationResult({
     expectedStudents: sortedStudents,
     roomCapacities,
     rooms,
+    fairnessFeasibility,
   });
 
   const summary = buildReviewSummary({
     rooms,
+    fairnessFeasibility,
+    validation,
   });
 
   return {

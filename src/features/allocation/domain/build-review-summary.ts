@@ -1,7 +1,9 @@
 import type {
   AllocationRoomResult,
+  AllocationValidationResult,
   AllocationWarning,
   ClassDistributionMetric,
+  FairnessFeasibility,
   ReviewSummary,
   RoomClassBreakdown,
   RoomSizeBucket,
@@ -9,6 +11,8 @@ import type {
 
 interface BuildReviewSummaryInput {
   rooms: AllocationRoomResult[];
+  fairnessFeasibility?: FairnessFeasibility | null;
+  validation?: AllocationValidationResult;
 }
 
 function toPercent(count: number, total: number): number {
@@ -32,6 +36,8 @@ function compareByCountThenName(
 
 export function buildReviewSummary({
   rooms,
+  fairnessFeasibility = null,
+  validation,
 }: BuildReviewSummaryInput): ReviewSummary {
   const roomSizes = rooms.map((room) => room.students.length);
   const totalStudents = roomSizes.reduce((total, size) => total + size, 0);
@@ -135,6 +141,24 @@ export function buildReviewSummary({
     });
   }
 
+  if (fairnessFeasibility?.fallbackApplied) {
+    warnings.push({
+      severity: "warning",
+      code: fairnessFeasibility.reasonCode ?? "strict_fairness_fallback",
+      message:
+        fairnessFeasibility.reason ??
+        "Strict fairness không khả thi; hệ thống đã dùng fallback deterministic.",
+    });
+  }
+
+  validation?.classSpreadViolations.forEach((violation) => {
+    warnings.push({
+      severity: "warning",
+      code: violation.code,
+      message: violation.message,
+    });
+  });
+
   return {
     totalStudents,
     roomCount,
@@ -144,6 +168,9 @@ export function buildReviewSummary({
     roomSizeBuckets,
     roomClassBreakdown,
     classDistribution,
+    classSpreadByClass: validation?.classSpreadByClass ?? [],
+    classSpreadViolations: validation?.classSpreadViolations ?? [],
+    fairnessFeasibility,
     warnings,
   };
 }

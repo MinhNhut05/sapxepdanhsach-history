@@ -96,10 +96,55 @@ export interface ClassDistributionMetric {
   rooms: ClassDistributionRoomMetric[];
 }
 
+export interface ClassSpreadRoomMetric {
+  roomNumber: number;
+  count: number;
+}
+
+export interface ClassSpreadMetric {
+  className: string;
+  totalStudents: number;
+  expectedMinPerRoom: number;
+  expectedMaxPerRoom: number;
+  minCount: number;
+  maxCount: number;
+  spread: number;
+  rooms: ClassSpreadRoomMetric[];
+}
+
+export interface ClassSpreadViolation {
+  className: string;
+  code: string;
+  message: string;
+  expectedMinPerRoom: number;
+  expectedMaxPerRoom: number;
+  actualMinCount: number;
+  actualMaxCount: number;
+  spread: number;
+}
+
+export interface FairnessFeasibility {
+  strategy: AllocationStrategyKey;
+  strictClassSpreadTarget: number | null;
+  feasible: boolean;
+  fallbackApplied: boolean;
+  reasonCode: string | null;
+  reason: string | null;
+}
+
+export interface AllocationValidationResult {
+  classSpreadByClass: ClassSpreadMetric[];
+  classSpreadViolations: ClassSpreadViolation[];
+  fairnessFeasibility: FairnessFeasibility | null;
+}
+
 export interface ReviewSummary extends AllocationRunSummary {
   roomSizeBuckets: RoomSizeBucket[];
   roomClassBreakdown: RoomClassBreakdown[];
   classDistribution: ClassDistributionMetric[];
+  classSpreadByClass: ClassSpreadMetric[];
+  classSpreadViolations: ClassSpreadViolation[];
+  fairnessFeasibility: FairnessFeasibility | null;
   warnings: AllocationWarning[];
 }
 
