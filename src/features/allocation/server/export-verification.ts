@@ -9,6 +9,10 @@ import { verifyWithAi } from "./export-ai-verifier";
 import { handleExportAiFailure } from "./export-ai-fallback";
 import { evaluateExportGate } from "./export-verification-policy";
 
+export const deterministicChecks = {
+  buildDeterministicFindings,
+};
+
 export type ExportVerificationStatus = "pass" | "fail";
 export type ExportVerificationFindingSeverity = "blocking" | "warning" | "info";
 export type ExportVerificationSource = "deterministic" | "ai";
