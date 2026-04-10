@@ -94,4 +94,82 @@ describe("buildReviewSummary", () => {
       }),
     ]);
   });
+
+  it("surfaces fairness feasibility and class spread diagnostics", () => {
+    const students = [
+      createStudent(0, "A1"),
+      createStudent(1, "A1"),
+      createStudent(2, "A1"),
+      createStudent(3, "B1"),
+    ];
+    const rooms = generateCandidateNumbers(
+      [
+        {
+          roomNumber: 1,
+          capacity: 2,
+          students: [students[0], students[1]],
+        },
+        {
+          roomNumber: 2,
+          capacity: 2,
+          students: [students[2], students[3]],
+        },
+      ],
+      {
+        preserveStudentOrder: true,
+      },
+    );
+
+    const summary = buildReviewSummary({
+      rooms,
+      fairnessFeasibility: {
+        strategy: "representative_ratio",
+        strictClassSpreadTarget: 1,
+        feasible: true,
+        fallbackApplied: false,
+        reasonCode: null,
+        reason: null,
+      },
+      validation: {
+        fairnessFeasibility: {
+          strategy: "representative_ratio",
+          strictClassSpreadTarget: 1,
+          feasible: true,
+          fallbackApplied: false,
+          reasonCode: null,
+          reason: null,
+        },
+        classSpreadByClass: [
+          {
+            className: "A1",
+            totalStudents: 3,
+            expectedMinPerRoom: 1,
+            expectedMaxPerRoom: 2,
+            minCount: 1,
+            maxCount: 2,
+            spread: 1,
+            rooms: [
+              { roomNumber: 1, count: 2 },
+              { roomNumber: 2, count: 1 },
+            ],
+          },
+        ],
+        classSpreadViolations: [],
+      },
+    });
+
+    expect(summary.fairnessFeasibility).toMatchObject({
+      feasible: true,
+      fallbackApplied: false,
+    });
+    expect(summary.classSpreadByClass).toEqual([
+      expect.objectContaining({
+        className: "A1",
+        spread: 1,
+        expectedMinPerRoom: 1,
+        expectedMaxPerRoom: 2,
+      }),
+    ]);
+    expect(summary.classSpreadViolations).toEqual([]);
+  });
 });

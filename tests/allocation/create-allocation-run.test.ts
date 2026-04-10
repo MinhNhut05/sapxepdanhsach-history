@@ -53,6 +53,17 @@ function createK19ABaselineRoster(): CanonicalStudentRecord[] {
   });
 }
 
+function createStrictFairnessRoster(): CanonicalStudentRecord[] {
+  return [
+    createStudent("MS001", "A1", "Hoc Vien 001", 1),
+    createStudent("MS002", "A1", "Hoc Vien 002", 2),
+    createStudent("MS003", "A1", "Hoc Vien 003", 3),
+    createStudent("MS004", "B1", "Hoc Vien 004", 4),
+    createStudent("MS005", "B1", "Hoc Vien 005", 5),
+    createStudent("MS006", "B1", "Hoc Vien 006", 6),
+  ];
+}
+
 describe("createAllocationRun", () => {
   it("returns identical results for repeated runs with the same settings", () => {
     const students = createK19ABaselineRoster();
@@ -93,5 +104,25 @@ describe("createAllocationRun", () => {
     expect(roomSizes.filter((size) => size === 21)).toHaveLength(12);
     expect(roomSizes.filter((size) => size === 20)).toHaveLength(1);
     expect(result.summary.sizeSpread).toBeLessThanOrEqual(1);
+  });
+
+  it("reports feasible strict fairness metadata for representative allocation", () => {
+    const result = createAllocationRun({
+      students: createStrictFairnessRoster(),
+      roomCount: 3,
+      strategy: "representative_ratio",
+    });
+
+    expect(result.summary.fairnessFeasibility).toMatchObject({
+      feasible: true,
+      fallbackApplied: false,
+      reasonCode: null,
+    });
+    expect(result.summary.classSpreadByClass).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ className: "A1", spread: 0 }),
+        expect.objectContaining({ className: "B1", spread: 0 }),
+      ]),
+    );
   });
 });
